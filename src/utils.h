@@ -1,0 +1,2 @@
+
+double safelog (double x);
