@@ -34,8 +34,6 @@
   <ol>
     <li>
       <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
       </ul>
     </li>
     <li>
@@ -66,22 +64,6 @@ The data structure is a deconstructed sparse matrix.
 A function using the same data structure to calculate profile confidence intervals with a crude search pattern is provided.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-### Built With
-
-* [![rtools][rtools]][(https://cran.r-project.org/bin/windows/Rtools/)]
-* [![devtools][devtools]][(https://devtools.r-lib.org)]
-* [![Positron][Positron]][(https://posit.co)]
-* [![Rcpp][Rcpp]][(https://www.rcpp.org)]
-* [![RcppParallel][RcppParallel]][(https://github.com/rcppcore/rcppparallel)]
-* [![OpenMP][OpenMP]][(www.openmp.org)]
-* [![data.table][data.table]][(https://rdatatable.gitlab.io/data.table/)]
-
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 
 
 <!-- GETTING STARTED -->
@@ -140,6 +122,15 @@ Project Link: [https://github.com/colincrooks/coxsparse](https://github.com/coli
   *Mittal, S., Madigan, D., Burd, R. S., & Suchard, M. a. (2013). High-dimensional, massive sample-size Cox proportional hazards regression for survival analysis. Biostatistics, 1–15. doi:10.1093/biostatistics/kxt043, [Mittal et al](https://academic.oup.com/biostatistics/article/15/2/207/226074)
 
   *Therneau T (2024). _A Package for Survival Analysis in R_. R package version 3.8-3, [Therneau (2024)](https://CRAN.R-project.org/package=survival).
+
+* [rtools](https://cran.r-project.org/bin/windows/Rtools/)
+* [devtools](https://devtools.r-lib.org)
+* [Positron](https://posit.co)
+* [Rcpp](https://www.rcpp.org)
+* [RcppParallel](https://github.com/rcppcore/rcppparallel)
+* [OpenMP](www.openmp.org)
+* [data.table](https://rdatatable.gitlab.io/data.table/)
+
 
   *Readme based on this template: (https://github.com/othneildrew/Best-README-Template)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
