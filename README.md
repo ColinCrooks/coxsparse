@@ -77,7 +77,6 @@ It has a Makevars file in /src/ which contains optimisation flags to compile and
 In R can use:
   ```r
   install.packages('installr','Rcpp','RcppParallel')
-  library(installr)
   installr::install.Rtools()
   
   ```
@@ -129,7 +128,5 @@ Project Link: [https://github.com/colincrooks/coxsparse](https://github.com/coli
 * [RcppParallel](https://github.com/rcppcore/rcppparallel)
 * [OpenMP](www.openmp.org)
 * [data.table](https://rdatatable.gitlab.io/data.table/)
-
-
-  *Readme based on this template: (https://github.com/othneildrew/Best-README-Template)
+* [Readme based on this template](https://github.com/othneildrew/Best-README-Template)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
