@@ -119,10 +119,9 @@ Project Link: [https://github.com/colincrooks/coxsparse](https://github.com/coli
 
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
-  *Mittal, S., Madigan, D., Burd, R. S., & Suchard, M. a. (2013). High-dimensional, massive sample-size Cox proportional hazards regression for survival analysis. Biostatistics, 1–15. doi:10.1093/biostatistics/kxt043, [Mittal et al](https://academic.oup.com/biostatistics/article/15/2/207/226074)
 
-  *Therneau T (2024). _A Package for Survival Analysis in R_. R package version 3.8-3, [Therneau (2024)](https://CRAN.R-project.org/package=survival).
-
+* [Mittal, S., Madigan, D., Burd, R. S., & Suchard, M. a. (2013). High-dimensional, massive sample-size Cox proportional hazards regression for survival analysis. Biostatistics, 1–15. doi:10.1093/biostatistics/kxt043](https://academic.oup.com/biostatistics/article/15/2/207/226074)
+* [Therneau T (2024). _A Package for Survival Analysis in R_. R package version 3.8-3](https://CRAN.R-project.org/package=survival).
 * [rtools](https://cran.r-project.org/bin/windows/Rtools/)
 * [devtools](https://devtools.r-lib.org)
 * [Positron](https://posit.co)
