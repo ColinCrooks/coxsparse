@@ -78,8 +78,8 @@
 #' * Frailty The frailty value for each unique ID group on linear predictor scale 
 #'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
 #' @export
-cox_reg_sparse_parallel <- function(covrowlist_in, beta_in, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, nvar, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
-    .Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', covrowlist_in, beta_in, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, nvar, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn)
+cox_reg_sparse_parallel <- function(beta_in, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
+    .Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', beta_in, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn)
 }
 
 #' profile_ci
@@ -146,8 +146,8 @@ cox_reg_sparse_parallel <- function(covrowlist_in, beta_in, obs_in, coval_in, we
 #'@return Numeric matrix with nvar rows and lower and upper confidence intervals in 2 columns.
 #'
 #'@export
-profile_ci <- function(covrowlist_in, beta_in, id_in, recurrent, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, lambda, nvar, MSTEP_MAX_ITER, decimals, confint_width, threadn) {
-    .Call('_coxsparse_profile_ci', PACKAGE = 'coxsparse', covrowlist_in, beta_in, id_in, recurrent, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, lambda, nvar, MSTEP_MAX_ITER, decimals, confint_width, threadn)
+profile_ci <- function(covrowlist_in, beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, nvar, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn) {
+    .Call('_coxsparse_profile_ci', PACKAGE = 'coxsparse', covrowlist_in, beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, nvar, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn)
 }
 
 safelog <- function(x) {

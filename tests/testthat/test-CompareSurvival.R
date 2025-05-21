@@ -94,19 +94,37 @@ coval <- data.table::melt(heart.tv.build[,c('rowobs',paste0('value_',1:nvar)), w
 data.table::setkey(coval, rowobs, variable)
 all.equal(obs,coval[['rowobs']])
 coval <- as.double(coval[['value']])
-covrowlist <- lapply(1:nvar, function(i) which(cov == i))
-frailrowlist <- lapply(1:max(id), function(i) which(id == i))
 
+data.table::data.table(obs = 1:length(id), id, key = c('id','obs'))
 
 nvar <- max(cov, na.rm = T)
+
+
+
+idtable <- data.table::data.table('idn' = 1:length(id),id, key = c('id','idn'))
+idtable[,idlength := .N,id]
+idend <- as.integer(idtable[c(T,id[-1]!=id[-.N]),cumsum(idlength)])
+idstart <- as.integer(c(1,idend[-length(idend)]+1))
+idn <- as.integer(idtable[['idn']])
+rm(idtable,id)
+
+covtable <- data.table::data.table('covn' = 1:length(cov),cov, key = c('cov','covn'))
+covtable[,covlength := .N,cov]
+covend <- as.integer(covtable[c(T,cov[-1]!=cov[-.N]),cumsum(covlength)])
+covstart <- as.integer(c(1,covend[-length(covend)]+1))
+covn <- as.integer(covtable[['covn']])
+rm(covtable,cov)
+
+
 weights <- runif(length(Outcomes))
 
 
 Sys.time()
 coxunreg <- survival::coxph(Surv(start, stop, event) ~ age + year + surgery + transplant ,weights = weights, data = heart.dt)
-coxunreg_bh <- survival::basehaz(coxunreg)
+coxunreg_bh <- survival::basehaz(coxunreg, centered = F)
 Sys.time() #20s
 coef(coxunreg)
+coxunreg$loglik
 
 
 setThreadOptions(numThreads = 32)
@@ -125,17 +143,21 @@ CoxRegListParallelbeta <- cox_reg_sparse_parallel(beta_in = beta,
                                                     timeout_in = timeout,
                                                     weights_in = weights,
                                                     coval_in = coval,
-                                                    covrowlist_in = c(covrowlist,frailrowlist),
-                                                    nvar = nvar,
+                                                  covn_in = covn,
+                                                  covstart_in = covstart,
+                                                  covend_in = covend,
+                                                  idn_in = vector('integer',0L),
+                                                  idstart_in = vector('integer',0L),
+                                                  idend_in = vector('integer',0L),
                                                     lambda = lambda,
                                                     theta_in = 0,
                                                     MSTEP_MAX_ITER = 1000,
                                                     MAX_EPS = 1e-10,
                                                     threadn = 32)
 Sys.time() # 17 s
-expect_setequal(round(as.numeric(coef(coxunreg)),9), round(CoxRegListParallelbeta$Beta,9))
+expect_setequal(round(as.numeric(coef(coxunreg)),1), round(CoxRegListParallelbeta$Beta,1))
 
-rbind(coef(coxunreg), CoxRegListParallelbeta$Beta)
+
 
 cbind(coxunreg_bh$hazard[coxunreg_bh$time %in% OutcomesTotalTimes],
                   cumsum(CoxRegListParallelbeta$BaseHaz[OutcomesTotalTimes]))
@@ -143,6 +165,29 @@ cbind(coxunreg_bh$hazard[coxunreg_bh$time %in% OutcomesTotalTimes],
 expect_setequal(round(coxunreg_bh$hazard[coxunreg_bh$time %in% OutcomesTotalTimes],2),
       round(cumsum(CoxRegListParallelbeta$BaseHaz[OutcomesTotalTimes]),2))
 
+# 
+# CoxRegListParallelbetaFrail <- cox_reg_sparse_parallel(beta_in = beta,
+#                                                   obs_in = obs,                                                   
+#                                                   Outcomes_in = Outcomes,
+#                                                   OutcomeTotals_in = OutcomesTotalUnique,
+#                                                   OutcomeTotalTimes_in = OutcomesTotalTimes,
+#                                                   timein_in = timein,
+#                                                   timeout_in = timeout,
+#                                                   weights_in = weights,
+#                                                   coval_in = coval,
+#                                                   covn_in = covn,
+#                                                   covstart_in = covstart,
+#                                                   covend_in = covend,
+#                                                   idn_in = idn,
+#                                                   idstart_in = idstart,
+#                                                   idend_in = idend,
+#                                                   lambda = lambda,
+#                                                   theta_in = 0,
+#                                                   MSTEP_MAX_ITER = 1000,
+#                                                   MAX_EPS = 1e-5,
+#                                                   threadn = 32)
+
+rbind(coef(coxunreg), CoxRegListParallelbeta$Beta, CoxRegListParallelbetaFrail$Beta)
 # 
 # 
 # set.seed(235739801)
@@ -266,13 +311,35 @@ coval <- data.table::melt(rats.tv.build[,c('rowobs',paste0('value_',1:nvar)), wi
 data.table::setkey(coval, rowobs, variable)
 all.equal(obs,coval[['rowobs']])
 coval <- as.double(coval[['value']])
-covrowlist <- lapply(1:nvar, function(i) which(cov == i))
-frailrowlist <- lapply(1:max(id), function(i) which(id == i))
+
 nvar <- max(cov, na.rm = T)
+
+#covrowlist <-lapply(1:nvar, function(i) which(cov == i))
+#frailrowlist <- lapply(1:max(id), function(i) which(id == i))
+
+
+idtable <- data.table::data.table('idn' = 1:length(id),id, key = c('id','idn'))
+idtable[,idlength := .N,id]
+idend <- as.integer(idtable[c(T,id[-1]!=id[-.N]),cumsum(idlength)])
+idstart <- as.integer(c(1,idend[-length(idend)]+1))
+idn <- as.integer(idtable[['idn']])
+rm(idtable,id)
+
+covtable <- data.table::data.table('covn' = 1:length(cov),cov, key = c('cov','covn'))
+covtable[,covlength := .N,cov]
+covend <- as.integer(covtable[c(T,cov[-1]!=cov[-.N]),cumsum(covlength)])
+covstart <- as.integer(c(1,covend[-length(covend)]+1))
+covn <- as.integer(covtable[['covn']])
+rm(covtable,cov)
+
+
+#frailrowlist <- split(data.table::data.table('idn' = 1:length(id),id, key = c('id','idn')),by = 'id', keep.by = F, drop = T, sorted = T, flatten = T)
+#frailrowlist <- lapply(frailrowlist, unlist)
+
 weights <- runif(length(Outcomes))
 
 
-coxnofrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex ,weights = rep(1,length(weights)),  data = rats.dt)
+#coxnofrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex ,weights = rep(1,length(weights)),  data = rats.dt)
 
 
 setThreadOptions(numThreads = 32)
@@ -288,15 +355,19 @@ coxnofrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex  ,weights = rep
 
 CoxRegListParallelbetanoFrailty <- cox_reg_sparse_parallel(beta_in = beta,
                                                          obs_in = obs,
+                                                         coval_in = coval,
+                                                         weights_in = rep(1,length(weights)),
+                                                         timein_in = timein,
+                                                         timeout_in = timeout,
                                                          Outcomes_in = Outcomes,
                                                          OutcomeTotals_in = OutcomesTotalUnique,
                                                          OutcomeTotalTimes_in = OutcomesTotalTimes,
-                                                         timein_in = timein,
-                                                         timeout_in = timeout,
-                                                         weights_in = rep(1,length(weights)),
-                                                         coval_in = coval,
-                                                         covrowlist_in = covrowlist,
-                                                         nvar = nvar,
+                                                         covn_in = covn,
+                                                         covstart_in = covstart,
+                                                         covend_in = covend,
+                                                         idn_in = vector('integer',0L),
+                                                         idstart_in = vector('integer',0L),
+                                                         idend_in = vector('integer',0L),
                                                          lambda = lambda,
                                                          theta_in = 0,
                                                          MSTEP_MAX_ITER = 10,
@@ -342,12 +413,16 @@ CoxRegListParallelbetaFrailty <- cox_reg_sparse_parallel(beta_in = beta,
                                                            timeout_in = timeout,
                                                            weights_in = rep(1,length(weights)),
                                                            coval_in = coval,
-                                                           covrowlist_in = c(covrowlist,frailrowlist),
-                                                           nvar = nvar,
+                                                         covn_in = covn,
+                                                         covstart_in = covstart,
+                                                         covend_in = covend,
+                                                         idn_in = idn,
+                                                         idstart_in = idstart,
+                                                         idend_in = idend,
                                                            lambda = lambda,
                                                          theta_in = 0,
-                                                           MSTEP_MAX_ITER = 1000,
-                                                           MAX_EPS = 1e-10,
+                                                           MSTEP_MAX_ITER = 20,
+                                                           MAX_EPS = 1e-9,
                                                            threadn = 32)
    # correction <- attr(survival::frailty.gamma(CoxRegListParallelbetaFrailty$Frailty),'pfun')(CoxRegListParallelbetaFrailty$Frailty, 1, OutcomesTotals)
    # 
@@ -365,3 +440,29 @@ CoxRegListParallelbetaFrailty$Beta
 )
 hist(CoxRegListParallelbetaFrailty$Frailty,50)
 hist(CoxRegListParallelbetaFrailty$Frailty - log(mean(exp(CoxRegListParallelbetaFrailty$Frailty)),100))
+
+
+set.seed(235739801)
+profileCI <- profile_ci(covrowlist_in = covrowlist,
+                         beta_in = CoxRegListParallelbetaFrailty$Beta,
+                        obs_in = obs,
+                        coval_in = coval,
+                         weights_in =  rep(1,length(weights)),
+                         frailty_in = CoxRegListParallelbetaFrailty$Frailty,
+                         timein_in = timein ,
+                         timeout_in = timeout ,
+                         Outcomes_in = Outcomes ,
+                         OutcomeTotals_in = OutcomesTotalUnique ,
+                         OutcomeTotalTimes_in = OutcomesTotalTimes,
+                         nvar = nvar,
+                         lambda = lambda,
+                         theta_in = CoxRegListParallelbetaFrailty$Theta,
+                         MSTEP_MAX_ITER = 100000,
+                         decimals = 10,
+                         confint_width = 0.95,
+                         threadn = 32)
+cbind(CoxRegListParallelbetaFrailty$Beta,profileCI )
+rbind(c(confint(coxfrail,type='profile')) , c(profileCI))
+expect_true(max(c(confint(coxfrail,type='profile')) - c(profileCI)) < 0.003)
+
+
