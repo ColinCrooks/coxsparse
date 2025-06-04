@@ -424,14 +424,28 @@ CoxRegListParallelbetaFrailty <- cox_reg_sparse_parallel(beta_in = beta,
                                                            MSTEP_MAX_ITER = 20,
                                                            MAX_EPS = 1e-9,
                                                            threadn = 32)
-   # correction <- attr(survival::frailty.gamma(CoxRegListParallelbetaFrailty$Frailty),'pfun')(CoxRegListParallelbetaFrailty$Frailty, 1, OutcomesTotals)
+ 
+
+expect_equal(CoxRegListParallelbetaFrailty$Frailty-CoxRegListParallelbetaFrailty$ModelSummary[8],
+coxfrail$frail,tolerance = 10-9)
+
+names(CoxRegListParallelbetaFrailty$Beta) <- c('rx', 'sex')
+
+expect_equal(CoxRegListParallelbetaFrailty$Beta,
+             coxfrail$coefficients,tolerance = 10-9)
+
+cbind(CoxRegListParallelbetaFrailty$BaseHaz[c(timeout[-1]!=timeout[-length(timeout)],T)], basehaz(coxfrail))
+
+  # correction <- attr(survival::frailty.gamma(CoxRegListParallelbetaFrailty$Frailty),'pfun')(CoxRegListParallelbetaFrailty$Frailty, 1, OutcomesTotals)
    # 
    # history[[i]] <- as.vector(theta , CoxRegListParallelbetaFrailty$loglik + correction) 
    # attr(survival::frailty.gamma(CoxRegListParallelbetaFrailty$Frailty),'pfun')()
    # i <- i + 1
   
 #}
-# attr(frailty.gamma(CoxRegListParallelbetaFrailty$Frailty),'pfun')(CoxRegListParallelbetaFrailty$Frailty, 1, OutcomesTotals) 
+#attr(frailty.gamma(CoxRegListParallelbetaFrailty$Frailty),'pfun')(CoxRegListParallelbetaFrailty$Frailty, 1, OutcomesTotals) 
+
+cox_reg_sparse_parallel$
 
 rbind(coef(coxnofrail),
       CoxRegListParallelbetanoFrailty$Beta,
