@@ -78,8 +78,8 @@
 #' * Frailty The frailty value for each unique ID group on linear predictor scale 
 #'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
 #' @export
-cox_reg_sparse_parallel <- function(obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
-    .Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn)
+cox_reg_sparse_parallel <- function(beta_in, frailty_in, basehaz_in, cumhaz_in, BaseHazardEntry_in, cumhazEntry_in, cumhaz1year_in, Risk_in, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
+    .Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', beta_in, frailty_in, basehaz_in, cumhaz_in, BaseHazardEntry_in, cumhazEntry_in, cumhaz1year_in, Risk_in, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn)
 }
 
 #' profile_ci

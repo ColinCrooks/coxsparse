@@ -11,11 +11,19 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // cox_reg_sparse_parallel
-List cox_reg_sparse_parallel(IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, IntegerVector covn_in, IntegerVector covstart_in, IntegerVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
-RcppExport SEXP _coxsparse_cox_reg_sparse_parallel(SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP OutcomeTotals_inSEXP, SEXP OutcomeTotalTimes_inSEXP, SEXP covn_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP MAX_EPSSEXP, SEXP threadnSEXP) {
+DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in, DoubleVector frailty_in, DoubleVector basehaz_in, DoubleVector cumhaz_in, DoubleVector BaseHazardEntry_in, DoubleVector cumhazEntry_in, DoubleVector cumhaz1year_in, DoubleVector Risk_in, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, IntegerVector covn_in, IntegerVector covstart_in, IntegerVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
+RcppExport SEXP _coxsparse_cox_reg_sparse_parallel(SEXP beta_inSEXP, SEXP frailty_inSEXP, SEXP basehaz_inSEXP, SEXP cumhaz_inSEXP, SEXP BaseHazardEntry_inSEXP, SEXP cumhazEntry_inSEXP, SEXP cumhaz1year_inSEXP, SEXP Risk_inSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP OutcomeTotals_inSEXP, SEXP OutcomeTotalTimes_inSEXP, SEXP covn_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP MAX_EPSSEXP, SEXP threadnSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DoubleVector >::type beta_in(beta_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type frailty_in(frailty_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type basehaz_in(basehaz_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type cumhaz_in(cumhaz_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type BaseHazardEntry_in(BaseHazardEntry_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type cumhazEntry_in(cumhazEntry_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type cumhaz1year_in(cumhaz1year_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type Risk_in(Risk_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type obs_in(obs_inSEXP);
     Rcpp::traits::input_parameter< DoubleVector >::type coval_in(coval_inSEXP);
     Rcpp::traits::input_parameter< DoubleVector >::type weights_in(weights_inSEXP);
@@ -35,7 +43,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type MSTEP_MAX_ITER(MSTEP_MAX_ITERSEXP);
     Rcpp::traits::input_parameter< double >::type MAX_EPS(MAX_EPSSEXP);
     Rcpp::traits::input_parameter< long unsigned int >::type threadn(threadnSEXP);
-    rcpp_result_gen = Rcpp::wrap(cox_reg_sparse_parallel(obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn));
+    rcpp_result_gen = Rcpp::wrap(cox_reg_sparse_parallel(beta_in, frailty_in, basehaz_in, cumhaz_in, BaseHazardEntry_in, cumhazEntry_in, cumhaz1year_in, Risk_in, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -91,7 +99,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_coxsparse_cox_reg_sparse_parallel", (DL_FUNC) &_coxsparse_cox_reg_sparse_parallel, 19},
+    {"_coxsparse_cox_reg_sparse_parallel", (DL_FUNC) &_coxsparse_cox_reg_sparse_parallel, 27},
     {"_coxsparse_profile_ci", (DL_FUNC) &_coxsparse_profile_ci, 18},
     {"_coxsparse_safelog", (DL_FUNC) &_coxsparse_safelog, 1},
     {"_coxsparse_safesqrt", (DL_FUNC) &_coxsparse_safesqrt, 1},

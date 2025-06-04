@@ -82,7 +82,14 @@ using namespace RcppParallel;
 //'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
 //' @export
 // [[Rcpp::export]]
-List cox_reg_sparse_parallel(//DoubleVector beta_in,
+DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in,
+                             DoubleVector frailty_in,
+                             DoubleVector basehaz_in,
+                             DoubleVector cumhaz_in,
+                             DoubleVector BaseHazardEntry_in,
+                             DoubleVector cumhazEntry_in,
+                             DoubleVector cumhaz1year_in,
+                             DoubleVector Risk_in,
                               IntegerVector obs_in,
                               DoubleVector  coval_in,
                               DoubleVector  weights_in,
@@ -130,17 +137,12 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   double theta = theta_in;
   double nu = theta_in == 0 ? 0 : 1.0/theta_in;
   double frailty_mean = 0;
-
-  DoubleVector frl(maxid);
-  RVector<double> frailty(frl);
-
   double frailty_penalty = 0.0;
   int * frailty_group_events = new int [maxid]; // Count of events for each patient (for gamma penalty weight)
   for (int ir = 0; ir < maxid; ir++) {
-    frailty[ir] = 0.0;
     frailty_group_events[ir] = 0;
   }
-
+  
   std::vector<double> theta_history(MSTEP_MAX_ITER);
   theta_history = {0.0};
   std::vector<double> thetalkl_history(MSTEP_MAX_ITER);
@@ -164,9 +166,9 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   for (int ir = 0; ir < ntimes*4; ir++) derivMatrix[ir] = 0.0;
 
   /* Wrap all R objects to make thread safe for read and writing  */
-  DoubleVector beta_in(nvar);
-  beta_in.fill(0.0);
-  RVector<double> beta(beta_in);
+  //DoubleVector beta_in(nvar);
+  //beta_in.fill(0.0);
+
   RVector<double> coval(coval_in);
   RVector<double> weights(weights_in);
   RVector<int> Outcomes(Outcomes_in);
@@ -182,6 +184,17 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   RVector<int>  idstart(idstart_in);
   RVector<int>  idend(idend_in);
   
+//vectors for returning calculated results to avoid copying into list for return.
+//To be zeroed before use
+  RVector<double> cumhazEntry(cumhazEntry_in);
+  RVector<double> BaseHazardEntry(BaseHazardEntry_in);
+  RVector<double> cumhaz1year(cumhaz1year_in);
+  RVector<double> Risk(Risk_in);
+  RVector<double> basehaz(basehaz_in);
+  RVector<double> cumhaz(cumhaz_in);
+  RVector<double> beta(beta_in);
+  RVector<double> frailty(frailty_in);
+  
   double * step = new double [nvar + maxid];
   double * gdiagvar = new double [nvar + maxid];
   for (int ivar = 0; ivar < nvar + maxid; ivar++) 
@@ -193,9 +206,6 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   int iter_theta = 0;
   double inner_EPS = 1e-5;
   int done = 0;
-
-  
-
 
   for (int i = 0; i < nvar; i++)
   { /* per observation time calculations */
@@ -266,8 +276,8 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   
   for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
-  int theta_iter = 0;
-  for (theta_iter = 0; theta_iter < MSTEP_MAX_ITER && done == 0; theta_iter++) 
+  int outer_iter = 0;
+  for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++) 
   {
     newlk = 0.0;
     if (lambda !=0) newlk = -(log(sqrt(lambda)) * nvar);
@@ -956,10 +966,10 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
         
   
     } 
+    if (recurrent == 0) done = 1;
      /* end of theta loop */
   
 }
-<<<<<<< Updated upstream
 
 
   Rcout << std::endl << "Final betas " <<  std::endl;
@@ -967,23 +977,16 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   Rcout << '\n';
   Rcout << "Log likelihood : "  << loglik + lik_correction << std::endl;
   Rcout << "Theta : "  << theta << std::endl;
-  Rcout << "Outer iterations  : " << theta_iter << '\n';
+  Rcout << "Outer iterations  : " << outer_iter << '\n';
   Rcout << "Mean Frailty log(mean(exponentiated)) : "  << frailty_mean << std::endl;
-
-
-
-  DoubleVector bh(ntimes);
-  RVector<double> basehaz(bh);
-  for (int ir = 0; ir < ntimes; ir++)
-    basehaz[ir] = 0.0;
-  DoubleVector ch(ntimes);
-  RVector<double> cumhaz(ch);
 
   /* baseline hazard whilst zbeta in memory */
   // need to have cumulative baseline hazard
 
   int timesN =  OutcomeTotals.size() -1;
-
+  for (int ir = 0; ir < ntimes; ir++)
+    basehaz[ir] = 0.0;
+  
   #pragma omp parallel for default(none) shared(timesN, OutcomeTotals, OutcomeTotalTimes, denom, efron_wt, basehaz)
     for (int r =  timesN - 1; r >= 0; r--)
     {
@@ -1016,14 +1019,7 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
     }
   }
 
-  DoubleVector chentry(maxobs);
-  RVector<double> cumhazEntry(chentry);
-  DoubleVector bhentry(maxobs);
-  RVector<double> BaseHazardEntry(bhentry);
-  DoubleVector ch1yr(maxobs);
-  RVector<double> cumhaz1year(ch1yr);
-  DoubleVector rsk(maxobs);
-  RVector<double> Risk(rsk);
+
   
 #pragma omp parallel for  default(none)  shared(ntimes,frailty_mean, cumhaz1year,cumhazEntry, cumhaz, BaseHazardEntry, Risk, basehaz, timein, zbeta, weights, maxobs)
   for (int rowobs = 0; rowobs < maxobs ; rowobs++)
@@ -1036,68 +1032,6 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
     cumhaz1year[rowobs] = cumhaz[time_one_year];
     Risk[rowobs] = exp(zbeta[rowobs] - frailty_mean);
   }
-=======
-//  for (int i = 0; i<nvar; i++) beta_in[i] = beta[i];
-
-/* baseline hazard whilst zbeta in memory */
-// need to have cumulative baseline hazard
-// 
-// int timesN =  OutcomeTotals.size() -1;
-// 
-// #pragma omp parallel for default(none) shared(timesN, OutcomeTotals, OutcomeTotalTimes, denom, efron_wt, basehaz)
-//   for (int r =  timesN - 1; r >= 0; r--)
-//   {
-//     double basehaz_private = 0.0;
-//     int time = OutcomeTotalTimes[r] - 1;
-//     for (int k = 0; k < OutcomeTotals[r]; k++)
-//     {
-//       double temp = (double)k
-//       / (double)OutcomeTotals[r];
-//       basehaz_private += 1.0/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
-//     }
-//   //  if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
-//     
-// #pragma omp atomic 
-//     basehaz[time] += basehaz_private; // should be thread safe as time unique per thread
-//   }
-// 
-// 
-// /* Carry forward last value of basehazard */
-// double last_value = 0.0;
-// 
-// cumhaz[0] = basehaz[0] ;
-// for (int t = 0; t < ntimes; t++)
-// {
-//   if (t>0) cumhaz[t] = cumhaz[t-1] +  basehaz[t];
-//   if (basehaz[t] == 0.0)
-//   {
-//     basehaz[t] = last_value;
-//   } else {
-//     last_value = basehaz[t];
-//   }
-// }
-// 
-// DoubleVector chentry(maxobs);
-// RVector<double> cumhazEntry(chentry);
-// DoubleVector bhentry(maxobs);
-// RVector<double> BaseHazardEntry(bhentry);
-// DoubleVector ch1yr(maxobs);
-// RVector<double> cumhaz1year(ch1yr);
-// DoubleVector rsk(maxobs);
-// RVector<double> Risk(rsk);
-// 
-// #pragma omp parallel for  default(none)  shared(ntimes,cumhaz1year,cumhazEntry, cumhaz, BaseHazardEntry, Risk, basehaz, timein, zbeta, weights, maxobs)
-//   for (int rowobs = 0; rowobs < maxobs ; rowobs++)
-//   {
-//     int time_index_entry = timein[rowobs] - 1;  // Time starts at zero but no events at this time to calculate sums. Lowest value of -1 but not used to reference into any vectors
-//     int time_one_year = time_index_entry + 365;
-//     if (time_one_year >= ntimes) time_one_year = ntimes -1;
-//     BaseHazardEntry[rowobs] = basehaz[time_index_entry];
-//     cumhazEntry[rowobs] = cumhaz[time_index_entry];
-//     cumhaz1year[rowobs] = cumhaz[time_one_year];
-//     Risk[rowobs] = exp(zbeta[rowobs]);
-//   }
->>>>>>> Stashed changes
 
 
 delete[] frailty_group_events;
@@ -1110,40 +1044,19 @@ delete[] step;
 delete[] gdiagvar;
 
 int nsummaries = 8;
-DoubleVector sum_meas(nsummaries);
-RVector<double> summary_measures(sum_meas);
+DoubleVector summary_measures(nsummaries);
 
 summary_measures[0] = loglik;
 summary_measures[1] = lik_correction;
 summary_measures[2] = loglik + lik_correction;
 summary_measures[3] = theta;
-summary_measures[4] = theta_iter;
+summary_measures[4] = outer_iter;
 summary_measures[5] = fabs(1.0 - (newlk / loglik));
 summary_measures[6] = fabs(1.0 - (thetalkl_history[iter_theta]/thetalkl_history[iter_theta-1]));
 summary_measures[7] = frailty_mean;
 
 
-return List::create(_["ModelSummary"] = summary_measures,
-                    _["Beta"] = beta,
-<<<<<<< Updated upstream
-                    _["Frailty"] = frailty,
-                    _["BaseHaz"] = basehaz,
-                    _["CumHaz"] = cumhaz,
-                    _["BaseHazardAtEntry"] = BaseHazardEntry,
-                    _["CumHazAtEntry"] = cumhazEntry,
-                    _["CumHazOneYear"] = cumhaz1year,
-                    _["Risk"] = Risk);
-
-=======
-                 //   _["BaseHaz"] = basehaz,
-                //    _["CumHaz"] = cumhaz,
-                //    _["BaseHazardAtEntry"] = BaseHazardEntry,
-                //    _["CumHazAtEntry"] = cumhazEntry,
-                //    _["CumHazOneYear"] = cumhaz1year,
-                //    _["Risk"] = Risk,
-                    _["Frailty"] = frailty,
-                    _["Theta"] = theta);
->>>>>>> Stashed changes
+return (summary_measures);
 
 }
 
