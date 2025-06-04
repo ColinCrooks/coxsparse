@@ -4,7 +4,7 @@
 #include "utils.h"
 using namespace Rcpp;
 using namespace RcppParallel;
-//' cox_reg_sparse_parallel
+//' cox_reg_sparse_hess
 //' 
 //' Description
 //' Implementation of a Cox proportional hazards model using 
@@ -82,7 +82,7 @@ using namespace RcppParallel;
 //'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
 //' @export
 // [[Rcpp::export]]
-List cox_reg_sparse_parallel(//DoubleVector beta_in,
+List cox_reg_sparse_hess(//DoubleVector beta_in,
                               IntegerVector obs_in,
                               DoubleVector  coval_in,
                               DoubleVector  weights_in,
@@ -91,12 +91,8 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
                               IntegerVector Outcomes_in ,
                               IntegerVector OutcomeTotals_in ,
                               IntegerVector OutcomeTotalTimes_in,
-                              IntegerVector covn_in,
-                              IntegerVector covstart_in,
-                              IntegerVector covend_in,
-                              IntegerVector idn_in,
-                              IntegerVector idstart_in,
-                              IntegerVector idend_in,
+                              IntegerVector cov_in,
+                              IntegerVector id_in,
                               double lambda,
                               double theta_in ,
                               int MSTEP_MAX_ITER,
@@ -160,9 +156,40 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   double * zbeta = new double [maxobs];
   for (int ir = 0; ir < maxobs; ir++) zbeta[ir] = 0.0;
 
-  double * derivMatrix = new double [ntimes*4];
-  for (int ir = 0; ir < ntimes*4; ir++) derivMatrix[ir] = 0.0;
+  double * fdiag = new double [maxid];
+  for (int ir = 0; ir < maxid; ir++) fdiag[ir] = 0.0; // diagonal of the frailty matrix
+  
+  double * tmean = new double [nvar + maxid];
+  double * u = new double [nvar + maxid];
+  double * a = new double [nvar + maxid];
+  double * a2 = new double [nvar + maxid];
+  double ** cmat = new double* [nvar];
+  double ** cmat2 = new double* [nvar];
+  double ** jmat = new double* [nvar];
+  
+  for (int ivar = 0; ivar < nvar + maxid; ivar++) 
+  { 
+    tmean[ivar] = 0.0;
+    a[ivar] = 0.0;
+    a2[ivar] = 0.0;
+    u[ivar] = 0.0;
+  }
+  
+  for (int ivar = 0; ivar < nvar; ivar++) 
+  {
+    cmat[ivar] = new double* [nvar + maxid];
+    cmat2[ivar] = new double* [nvar + maxid];
+    jmat[ivar] = new double* [nvar + maxid];
+    for (int jvar = 0; jvar < nvar + maxid; jvar++) 
+    {
+      cmat[ivar][jvar] = 0.0;
+      cmat2[ivar][jvar] = 0.0;
+      jmat[ivar][jvar] = 0.0; // Hessian matrix
+    }
+  }
 
+
+  
   /* Wrap all R objects to make thread safe for read and writing  */
   DoubleVector beta_in(nvar);
   beta_in.fill(0.0);
@@ -175,27 +202,130 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   RVector<int> obs(obs_in);
   RVector<int> timein(timein_in);
   RVector<int> timeout(timeout_in);
-  RVector<int>  covn(covn_in);
-  RVector<int>  covstart(covstart_in);
-  RVector<int>  covend(covend_in);
-  RVector<int>  idn(idn_in);
-  RVector<int>  idstart(idstart_in);
-  RVector<int>  idend(idend_in);
-  
+  RVector<int>  cov(cov_in);
+  RVector<int>  id(id_in);
   double * step = new double [nvar + maxid];
-  double * gdiagvar = new double [nvar + maxid];
-  for (int ivar = 0; ivar < nvar + maxid; ivar++) 
-  {
-    gdiagvar[ivar] = 0.0;
+  for (int ivar = 0; ivar < nvar + maxid; ivar++) {
     step[ivar] = 1.0;
   }
+  
+  double * gdiagvar = new double [nvar + maxid];
+  for (int ivar = 0; ivar < nvar + maxid; ivar++) gdiagvar[ivar] = 0.0;
   
   int iter_theta = 0;
   double inner_EPS = 1e-5;
   int done = 0;
 
+  for (int obsi = 0; obsi < maxobs; obsi++)
+    zbeta[obsi] += frailty[id[obsi] - 1]; // initial frailty values
   
-
+  for (int covi = cov.length(); covi >= 0; covi--)
+    zbeta[obs[covi] - 1] += coval[covi] * beta[cov[covi] - 1]; // cov[covi] is the covariate index, obs[covi] is the observation time index
+  
+  int covp = cov.length() - 1;
+  int ndead = 0;
+  
+  for (int covi = cov.length() - 1; covi >= 0; covi--)
+  {
+    if (covi == cov.length() - 1 || 
+        id[covi] != id[covi + 1]) covp = cov[covi] - 1; // start of covariate index
+    
+    cmat[covi][id[covi] - 1] += coval[covi]*exp(zbeta[obs[covi] - 1]);  
+    
+    for (covi2 = covp; covi2 >= covi; covi2--)
+      cmat[covi][covi2 + maxid] += coval[covi]*coval[covi2]*exp(zbeta[obs[covi] - 1]);
+    
+    if (Outcomes[obs[covi] - 1] > 0 )   
+    {
+      u[covi + maxid] += weights[id[covi] - 1] * coval[covi]; // u is the cumulative sum of weights for each patient ID
+      a2[covi + maxid] += exp(zbeta[obs[covi] - 1]) * coval[covi]; // a2 is the cumulative sum of risk for each patient ID
+      cmat2[covi][id[covi] - 1] += coval[covi]*exp(zbeta[obs[covi] - 1]);  
+      
+      for (covi2 = covp; covi2 >= covi; covi2--)
+        cmat2[covi][covi2 + maxid] += coval[covi]*coval[covi2]*exp(zbeta[obs[covi] - 1]);
+    }
+    
+    
+    if (covi == 0 || 
+        id[covi] != id[covi - 1] || 
+        timeout[covi] !=  timeout[covi - 1]) 
+    {
+      denom += exp(zbeta[obs[covi] - 1]);
+      a[id[covi] - 1] += exp(zbeta[obs[covi] - 1]);
+      
+      if (Outcomes[obs[covi] - 1] > 0 )   
+      {
+        efron_wt += exp(zbeta[obs[covi] - 1]); 
+        newlk += weights[id[covi - 1]] * exp(zbeta[obs[covi] - 1]); // weights[id[covi - 1]] is the weight for the patient at this time point
+        
+        u[id[covi] - 1] += weights[id[covi - 1]];
+        a2[id[covi] - 1] += exp(zbeta[obs[covi] - 1]);
+      }
+    }
+    
+    if (ndead > 0 & (covi == 0 || timeout[covi] !=  timeout[covi - 1])) 
+    {
+      for (int k=0; k<ndead; k++) {
+        temp = (double)k / ndead;
+        double d2= denom - temp*efron_wt;
+        newlk -= wt_average[timeout[covi] - 1] *safelog(d2);
+        
+        for (ivar = 0; ivar < nvar + maxid; ivar++) {  /* by row of full matrix */
+          temp2 = (a[ivar] - temp*a2[ivar])/d2;
+          tmean[ivar] = temp2;
+          u[ivar] -= wt_average[timeout[covi] - 1] *temp2;
+          if (ivar < maxid) fdiag[ivar] += temp2 * (1-temp2);
+          else {
+            int ii = ivar-maxid;     /*actual row in c/j storage space */
+            for (j=0; j<=ivar; j++) 
+              jmat[ii][j] +=  wt_average[timeout[covi] - 1] *
+                ((cmat[ii][j] - temp*cmat2[ii][j]) /d2 - temp2*tmean[j]);
+          }
+        }
+      }
+      efron_wt =0;
+      for (i=0; i<nvar + maxid; i++) {
+        a2[i]=0;
+        for (j=0; j<nvar; j++)  cmat2[j][i]=0;
+      }
+      ndead = 0;
+    }
+  }
+  
+  frailty_sum = 0.0;
+  for(int rowid = 0; rowid < maxid; rowid ++)  frailty_sum += exp(frailty[rowid]);
+  
+  frailty_mean = safelog(frailty_sum / maxid);
+  
+  for (int ivar = 0; ivar < maxid; ivar ++) 
+  {
+    u[ivar] += (exp(frailty[ivar] - frailty_mean) - 1.0) * nu; 
+    fdiag[ivar] += exp(frailty[ivar] - frailty_mean) * nu; 
+  }
+  
+  
+  
+    ///////////////////////////////////////////////////////////////////////////
+    
+    
+    for (i=0; i<nvar; i++) {
+      a[i+nf] += risk*covar[i][p];
+      if (nf>0) cmat[i][fgrp] += risk*covar[i][p];
+      for (j=0; j<=i; j++)
+        cmat[i][j+nf] += risk*covar[i][p]*covar[j][p];
+    }
+    
+    int time_index_entry = timestart[covi] - 1;
+    int time_index_exit = timeout[covi] - 1;
+    for (int covi2 = covi; covi2 < cov.length; covi++)
+    {
+      if (timestart[covi2] == time_index_exit) {
+        if (covi2 == cov.length - 1 ||  id[covi2] != id[covi2 + 1]) denom -= exp(zbeta[obs[covi2] - 1]);
+        cmat[covi][covi2] -= coval[covi2]*exp(zbeta[obs[covi] - 1]);  
+      }
+      if (timestart[covi2] > time_index_exit) break; // no more entries for this covariate
+    }
+  }
 
   for (int i = 0; i < nvar; i++)
   { /* per observation time calculations */
@@ -266,8 +396,8 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
   
   for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
-  int theta_iter = 0;
-  for (theta_iter = 0; theta_iter < MSTEP_MAX_ITER && done == 0; theta_iter++) 
+  
+  for (int theta_iter = 0; theta_iter < MSTEP_MAX_ITER && done == 0; theta_iter++) 
   {
     newlk = 0.0;
     if (lambda !=0) newlk = -(log(sqrt(lambda)) * nvar);
@@ -955,88 +1085,12 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
         nu = 1 / theta;
         
   
-    } 
+    } else {
+      break;
+    }
      /* end of theta loop */
   
 }
-<<<<<<< Updated upstream
-
-
-  Rcout << std::endl << "Final betas " <<  std::endl;
-  for (int i = 0; i < nvar; i ++) Rcout << beta[i] << " ";
-  Rcout << '\n';
-  Rcout << "Log likelihood : "  << loglik + lik_correction << std::endl;
-  Rcout << "Theta : "  << theta << std::endl;
-  Rcout << "Outer iterations  : " << theta_iter << '\n';
-  Rcout << "Mean Frailty log(mean(exponentiated)) : "  << frailty_mean << std::endl;
-
-
-
-  DoubleVector bh(ntimes);
-  RVector<double> basehaz(bh);
-  for (int ir = 0; ir < ntimes; ir++)
-    basehaz[ir] = 0.0;
-  DoubleVector ch(ntimes);
-  RVector<double> cumhaz(ch);
-
-  /* baseline hazard whilst zbeta in memory */
-  // need to have cumulative baseline hazard
-
-  int timesN =  OutcomeTotals.size() -1;
-
-  #pragma omp parallel for default(none) shared(timesN, OutcomeTotals, OutcomeTotalTimes, denom, efron_wt, basehaz)
-    for (int r =  timesN - 1; r >= 0; r--)
-    {
-      double basehaz_private = 0.0;
-      int time = OutcomeTotalTimes[r] - 1;
-      for (int k = 0; k < OutcomeTotals[r]; k++)
-      {
-        double temp = (double)k
-        / (double)OutcomeTotals[r];
-        basehaz_private += 1.0/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
-      }
-    //  if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
-
-  #pragma omp atomic
-      basehaz[time] += basehaz_private; // should be thread safe as time unique per thread
-    }
-  
-  /* Carry forward last value of basehazard */
-  double last_value = 0.0;
-
-  cumhaz[0] = basehaz[0] ;
-  for (int t = 0; t < ntimes; t++)
-  {
-    if (t>0) cumhaz[t] = cumhaz[t-1] +  basehaz[t];
-    if (basehaz[t] == 0.0)
-    {
-      basehaz[t] = last_value;
-    } else {
-      last_value = basehaz[t];
-    }
-  }
-
-  DoubleVector chentry(maxobs);
-  RVector<double> cumhazEntry(chentry);
-  DoubleVector bhentry(maxobs);
-  RVector<double> BaseHazardEntry(bhentry);
-  DoubleVector ch1yr(maxobs);
-  RVector<double> cumhaz1year(ch1yr);
-  DoubleVector rsk(maxobs);
-  RVector<double> Risk(rsk);
-  
-#pragma omp parallel for  default(none)  shared(ntimes,frailty_mean, cumhaz1year,cumhazEntry, cumhaz, BaseHazardEntry, Risk, basehaz, timein, zbeta, weights, maxobs)
-  for (int rowobs = 0; rowobs < maxobs ; rowobs++)
-  {
-    int time_index_entry = timein[rowobs] - 1;  // Time starts at zero but no events at this time to calculate sums. Lowest value of -1 but not used to reference into any vectors
-    int time_one_year = time_index_entry + 365;
-    if (time_one_year >= ntimes) time_one_year = ntimes -1;
-    BaseHazardEntry[rowobs] = basehaz[time_index_entry];
-    cumhazEntry[rowobs] = cumhaz[time_index_entry];
-    cumhaz1year[rowobs] = cumhaz[time_one_year];
-    Risk[rowobs] = exp(zbeta[rowobs] - frailty_mean);
-  }
-=======
 //  for (int i = 0; i<nvar; i++) beta_in[i] = beta[i];
 
 /* baseline hazard whilst zbeta in memory */
@@ -1097,44 +1151,19 @@ List cox_reg_sparse_parallel(//DoubleVector beta_in,
 //     cumhaz1year[rowobs] = cumhaz[time_one_year];
 //     Risk[rowobs] = exp(zbeta[rowobs]);
 //   }
->>>>>>> Stashed changes
 
 
-delete[] frailty_group_events;
-delete[] denom;
-delete[] efron_wt;
-delete[] wt_average;
-delete[] zbeta;
-delete[] derivMatrix;
 delete[] step;
 delete[] gdiagvar;
+delete[] denom;
+delete[] efron_wt;
+delete[] zbeta;
+delete[] derivMatrix;
+delete[] wt_average;
+delete[] frailty_group_events;
 
-int nsummaries = 8;
-DoubleVector sum_meas(nsummaries);
-RVector<double> summary_measures(sum_meas);
-
-summary_measures[0] = loglik;
-summary_measures[1] = lik_correction;
-summary_measures[2] = loglik + lik_correction;
-summary_measures[3] = theta;
-summary_measures[4] = theta_iter;
-summary_measures[5] = fabs(1.0 - (newlk / loglik));
-summary_measures[6] = fabs(1.0 - (thetalkl_history[iter_theta]/thetalkl_history[iter_theta-1]));
-summary_measures[7] = frailty_mean;
-
-
-return List::create(_["ModelSummary"] = summary_measures,
+return List::create(_["Loglik"] = loglik + lik_correction,
                     _["Beta"] = beta,
-<<<<<<< Updated upstream
-                    _["Frailty"] = frailty,
-                    _["BaseHaz"] = basehaz,
-                    _["CumHaz"] = cumhaz,
-                    _["BaseHazardAtEntry"] = BaseHazardEntry,
-                    _["CumHazAtEntry"] = cumhazEntry,
-                    _["CumHazOneYear"] = cumhaz1year,
-                    _["Risk"] = Risk);
-
-=======
                  //   _["BaseHaz"] = basehaz,
                 //    _["CumHaz"] = cumhaz,
                 //    _["BaseHazardAtEntry"] = BaseHazardEntry,
@@ -1143,12 +1172,5 @@ return List::create(_["ModelSummary"] = summary_measures,
                 //    _["Risk"] = Risk,
                     _["Frailty"] = frailty,
                     _["Theta"] = theta);
->>>>>>> Stashed changes
 
 }
-
-
-// 
-// 
-// // 
-

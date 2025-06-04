@@ -134,7 +134,7 @@ beta <- vector('double',nvar)
 beta <- rep(0,nvar)
 
 Sys.time()
-CoxRegListParallelbeta <- cox_reg_sparse_parallel(beta_in = beta,
+CoxRegListParallelbeta <- cox_reg_sparse_parallel(#beta_in = beta,
                                                    obs_in = obs,                                                   
                                                     Outcomes_in = Outcomes,
                                                     OutcomeTotals_in = OutcomesTotalUnique,
@@ -353,7 +353,7 @@ Sys.time()
 coxnofrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex  ,weights = rep(1,length(weights)),  data = rats.dt)
 
 
-CoxRegListParallelbetanoFrailty <- cox_reg_sparse_parallel(beta_in = beta,
+CoxRegListParallelbetanoFrailty <- cox_reg_sparse_parallel(#beta_in = beta,
                                                          obs_in = obs,
                                                          coval_in = coval,
                                                          weights_in = rep(1,length(weights)),
@@ -404,7 +404,7 @@ Sys.time()
 history <- list()
 # i <- 1
 # while( done == 0) {
-CoxRegListParallelbetaFrailty <- cox_reg_sparse_parallel(beta_in = beta,
+CoxRegListParallelbetaFrailty <- cox_reg_sparse_parallel(#beta_in = beta,
                                                            obs_in = obs,                                                   
                                                            Outcomes_in = Outcomes,
                                                            OutcomeTotals_in = OutcomesTotalUnique,
