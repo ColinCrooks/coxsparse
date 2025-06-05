@@ -82,14 +82,7 @@ using namespace RcppParallel;
 //'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
 //' @export
 // [[Rcpp::export]]
-DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in,
-                             DoubleVector frailty_in,
-                             DoubleVector basehaz_in,
-                             DoubleVector cumhaz_in,
-                             DoubleVector BaseHazardEntry_in,
-                             DoubleVector cumhazEntry_in,
-                             DoubleVector cumhaz1year_in,
-                             DoubleVector Risk_in,
+DoubleVector cox_reg_sparse_parallel(List modeldata,
                               IntegerVector obs_in,
                               DoubleVector  coval_in,
                               DoubleVector  weights_in,
@@ -166,9 +159,17 @@ DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in,
   for (int ir = 0; ir < ntimes*4; ir++) derivMatrix[ir] = 0.0;
 
   /* Wrap all R objects to make thread safe for read and writing  */
-  //DoubleVector beta_in(nvar);
-  //beta_in.fill(0.0);
-
+  
+  DoubleVector beta_in = modeldata["Beta"];
+  DoubleVector frailty_in = modeldata["Frailty"];
+  DoubleVector basehaz_in = modeldata["basehaz"];
+  DoubleVector cumhaz_in = modeldata["cumhaz"];
+  DoubleVector BaseHazardEntry_in = modeldata["BaseHazardEntry"];
+  DoubleVector cumhazEntry_in = modeldata["cumhazEntry"];
+  DoubleVector cumhaz1year_in = modeldata["cumhaz1year"];
+  DoubleVector Risk_in = modeldata["Risk"];
+  
+  
   RVector<double> coval(coval_in);
   RVector<double> weights(weights_in);
   RVector<int> Outcomes(Outcomes_in);
@@ -982,12 +983,27 @@ DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in,
 
   /* baseline hazard whilst zbeta in memory */
   // need to have cumulative baseline hazard
+ Rcout << " Calculating baseline hazard..." ;
 
+  
+  if (recurrent == 1)
+  {
+#pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty_mean) //reduction(+:zbeta[:maxobs])
+    for (int i = 0; i < maxid; i++) // +
+    { /* per observation time calculations */
+      for (int idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
+      {
+#pragma omp atomic
+        zbeta[idn[idi] - 1] -= frailty_mean ; // should be one frailty per person / observation
+      }
+    }
+  }
+  
+  
   int timesN =  OutcomeTotals.size() -1;
   for (int ir = 0; ir < ntimes; ir++)
     basehaz[ir] = 0.0;
-  
-  #pragma omp parallel for default(none) shared(timesN, OutcomeTotals, OutcomeTotalTimes, denom, efron_wt, basehaz)
+  #pragma omp parallel for default(none) shared(timesN,wt_average, OutcomeTotals, OutcomeTotalTimes, denom, efron_wt, basehaz)
     for (int r =  timesN - 1; r >= 0; r--)
     {
       double basehaz_private = 0.0;
@@ -996,14 +1012,17 @@ DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in,
       {
         double temp = (double)k
         / (double)OutcomeTotals[r];
-        basehaz_private += 1.0/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
+        basehaz_private += wt_average[time]/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
       }
-    //  if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
+      if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
 
-  #pragma omp atomic
-      basehaz[time] += basehaz_private; // should be thread safe as time unique per thread
+  #pragma omp atomic write
+      basehaz[time] = basehaz_private; // should be thread safe as time unique per thread
     }
-  
+  Rcout << " done" <<std::endl;
+    
+    Rcout << " Calculating cumulative baseline hazard..." ;
+    
   /* Carry forward last value of basehazard */
   double last_value = 0.0;
 
@@ -1018,8 +1037,10 @@ DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in,
       last_value = basehaz[t];
     }
   }
-
-
+  Rcout << " done" <<std::endl;
+  
+  Rcout << " Calculating individual baseline hazards..." ;
+  
   
 #pragma omp parallel for  default(none)  shared(ntimes,frailty_mean, cumhaz1year,cumhazEntry, cumhaz, BaseHazardEntry, Risk, basehaz, timein, zbeta, weights, maxobs)
   for (int rowobs = 0; rowobs < maxobs ; rowobs++)
@@ -1030,10 +1051,11 @@ DoubleVector cox_reg_sparse_parallel(DoubleVector beta_in,
     BaseHazardEntry[rowobs] = basehaz[time_index_entry];
     cumhazEntry[rowobs] = cumhaz[time_index_entry];
     cumhaz1year[rowobs] = cumhaz[time_one_year];
-    Risk[rowobs] = exp(zbeta[rowobs] - frailty_mean);
+    Risk[rowobs] = exp(zbeta[rowobs]);
   }
-
-
+  Rcout << " done" <<std::endl;
+  Rcout << " Cleaning up..." ;
+  
 delete[] frailty_group_events;
 delete[] denom;
 delete[] efron_wt;
@@ -1042,6 +1064,8 @@ delete[] zbeta;
 delete[] derivMatrix;
 delete[] step;
 delete[] gdiagvar;
+
+Rcout << " done" <<std::endl;
 
 int nsummaries = 8;
 DoubleVector summary_measures(nsummaries);
@@ -1055,6 +1079,10 @@ summary_measures[5] = fabs(1.0 - (newlk / loglik));
 summary_measures[6] = fabs(1.0 - (thetalkl_history[iter_theta]/thetalkl_history[iter_theta-1]));
 summary_measures[7] = frailty_mean;
 
+Rcout << " Returning : " ;
+for(int i = 0; i < 8; i++) Rcout << summary_measures[i] << ", ";
+
+Rcout <<  std::endl;
 
 return (summary_measures);
 
