@@ -503,12 +503,7 @@ updatelk -= updatelk_private;
 
       //Rcout << "updatelk " << updatelk << " newlk " << newlk << " threshold " << threshold << " dif " << dif << " lowerCI " << confinterval(i,0) << std::endl;
       
-      // Update the cumulative sums for the next iteration
-      for (int ir = 0 ; ir < ntimes; ir++)
-      {
-        denom[ir] = denom_update[ir];
-        efron_wt[ir] = efron_wt_update[ir];
-      }
+
     //      double dsum2 = 0;
       for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--)
       {

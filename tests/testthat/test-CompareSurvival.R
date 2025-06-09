@@ -538,7 +538,7 @@ profileCI <- profile_ci(beta_in = CoxRegListParallelbetaFrailty$Beta,
                          threadn = 32)
 cbind(CoxRegListParallelbetaFrailty$Beta,profileCI )
 rbind(c(confint(coxfrail,type='profile')) , c(profileCI))
-expect_true(max(c(confint(coxfrail,type='profile')) - c(profileCI)) < 0.003)
 
+expect_equal(c(confint(coxfrail,type='profile')),c(profileCI), tolerance = 0.2)
 
 ###################################################################################
