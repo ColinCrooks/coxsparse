@@ -196,9 +196,10 @@ DoubleVector cox_reg_sparse_parallel(List modeldata,
   RVector<double> beta(beta_in);
   RVector<double> frailty(frailty_in);
   
-  double * step = new double [nvar + maxid];
-  double * gdiagvar = new double [nvar + maxid];
-  for (int ivar = 0; ivar < nvar + maxid; ivar++) 
+  int nallvar = nvar + maxid;
+  double * step = new double [nallvar];
+  double * gdiagvar = new double [nallvar];
+  for (int ivar = 0; ivar < nallvar; ivar++) 
   {
     gdiagvar[ivar] = 0.0;
     step[ivar] = 1.0;
@@ -286,7 +287,7 @@ DoubleVector cox_reg_sparse_parallel(List modeldata,
     loglik = 0.0;
     frailty_penalty = 0.0;
     d2_sum_private = 0.0;
-    for (int ivar = 0; ivar < nvar + maxid; ivar++) step[ivar] = 1.0; 
+    for (int ivar = 0; ivar < nallvar; ivar++) step[ivar] = 1.0; 
 
     for (int ir = 0 ; ir < ntimes; ir++)
     {
@@ -1056,14 +1057,14 @@ DoubleVector cox_reg_sparse_parallel(List modeldata,
   Rcout << " done" <<std::endl;
   Rcout << " Cleaning up..." ;
   
-delete[] frailty_group_events;
-delete[] denom;
-delete[] efron_wt;
-delete[] wt_average;
-delete[] zbeta;
-delete[] derivMatrix;
-delete[] step;
-delete[] gdiagvar;
+if (frailty_group_events != nullptr)  delete[] frailty_group_events;
+if (denom != nullptr) delete[] denom;
+if (efron_wt != nullptr) delete[] efron_wt;
+if (wt_average != nullptr) delete[] wt_average;
+if (zbeta != nullptr) delete[] zbeta;
+if (derivMatrix != nullptr) delete[] derivMatrix;
+if (step != nullptr) delete[] step;
+if (gdiagvar != nullptr) delete[] gdiagvar;
 
 Rcout << " done" <<std::endl;
 
@@ -1087,9 +1088,4 @@ Rcout <<  std::endl;
 return (summary_measures);
 
 }
-
-
-// 
-// 
-// // 
 
