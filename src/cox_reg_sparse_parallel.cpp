@@ -119,6 +119,7 @@ DoubleVector cox_reg_sparse_parallel(List modeldata,
   int nvar = covstart_in.length();
   int maxid = idstart_in.length(); // Number of unique patients
   bool recurrent = maxid > 0;
+  int nallvar = nvar + maxid;
   
   double newlk = 0.0;
   double loglik = 0.0;
@@ -131,32 +132,48 @@ DoubleVector cox_reg_sparse_parallel(List modeldata,
   double nu = theta_in == 0 ? 0 : 1.0/theta_in;
   double frailty_mean = 0;
   double frailty_penalty = 0.0;
-  int * frailty_group_events = new int [maxid]; // Count of events for each patient (for gamma penalty weight)
-  for (int ir = 0; ir < maxid; ir++) {
-    frailty_group_events[ir] = 0;
-  }
+  // int * frailty_group_events = new int [maxid]; // Count of events for each patient (for gamma penalty weight)
+  // for (int ir = 0; ir < maxid; ir++) {
+  //   frailty_group_events[ir] = 0;
+  // }
+  std::vector<int> frailty_group_events(maxid); // Count of events for each patient (for gamma penalty weight)
+  frailty_group_events = {0};
   
   std::vector<double> theta_history(MSTEP_MAX_ITER);
-  theta_history = {0.0};
   std::vector<double> thetalkl_history(MSTEP_MAX_ITER);
+  std::vector<double> denom(ntimes);      // sum of risk of all patients at each time point
+  std::vector<double> efron_wt(ntimes);  // Sum of risk of patients with events at each time point
+  std::vector<double> wt_average(ntimes);  // Average weight of people with event at each time point.
+  std::vector<double> zbeta(maxobs);
+  std::vector<double> derivMatrix(ntimes*4);
+  std::vector<double> step(nallvar);
+  std::vector<double> gdiagvar(nallvar);
+  
+  theta_history = {0.0};
   thetalkl_history = {-std::numeric_limits<double>::infinity()};
-  
-  double * denom  = new double [ntimes];      // sum of risk of all patients at each time point
-  double * efron_wt  = new double [ntimes];  // Sum of risk of patients with events at each time point
-  double * wt_average  = new double [ntimes];  // Average weight of people with event at each time point.
-  
-  for (int ir = 0 ; ir < ntimes; ir++)
-  {
-    denom[ir] = 0.0;
-    efron_wt[ir] = 0.0;
-    wt_average[ir] = 0.0;
-  }
+  denom = {0.0};
+  efron_wt = {0.0};
+  wt_average = {0.0};
+  zbeta = {0.0};
+  derivMatrix = {0.0};
+  gdiagvar = {0.0};
+  step = {1.0};
+  // double * denom  = new double [ntimes];      // sum of risk of all patients at each time point
+  // double * efron_wt  = new double [ntimes];  // Sum of risk of patients with events at each time point
+  // double * wt_average  = new double [ntimes];  // Average weight of people with event at each time point.
+  // 
+  // for (int ir = 0 ; ir < ntimes; ir++)
+  // {
+  //   denom[ir] = 0.0;
+  //   efron_wt[ir] = 0.0;
+  //   wt_average[ir] = 0.0;
+  // }
 
-  double * zbeta = new double [maxobs];
-  for (int ir = 0; ir < maxobs; ir++) zbeta[ir] = 0.0;
-
-  double * derivMatrix = new double [ntimes*4];
-  for (int ir = 0; ir < ntimes*4; ir++) derivMatrix[ir] = 0.0;
+  // double * zbeta = new double [maxobs];
+  // for (int ir = 0; ir < maxobs; ir++) zbeta[ir] = 0.0;
+  // 
+  // double * derivMatrix = new double [ntimes*4];
+  // for (int ir = 0; ir < ntimes*4; ir++) derivMatrix[ir] = 0.0;
 
   /* Wrap all R objects to make thread safe for read and writing  */
   
@@ -196,15 +213,7 @@ DoubleVector cox_reg_sparse_parallel(List modeldata,
   RVector<double> beta(beta_in);
   RVector<double> frailty(frailty_in);
   
-  int nallvar = nvar + maxid;
-  double * step = new double [nallvar];
-  double * gdiagvar = new double [nallvar];
-  for (int ivar = 0; ivar < nallvar; ivar++) 
-  {
-    gdiagvar[ivar] = 0.0;
-    step[ivar] = 1.0;
-  }
-  
+
   int iter_theta = 0;
   double inner_EPS = 1e-5;
   int done = 0;
@@ -1055,18 +1064,18 @@ DoubleVector cox_reg_sparse_parallel(List modeldata,
     Risk[rowobs] = exp(zbeta[rowobs]);
   }
   Rcout << " done" <<std::endl;
-  Rcout << " Cleaning up..." ;
+//  Rcout << " Cleaning up..." ;
   
-if (frailty_group_events != nullptr)  delete[] frailty_group_events;
-if (denom != nullptr) delete[] denom;
-if (efron_wt != nullptr) delete[] efron_wt;
-if (wt_average != nullptr) delete[] wt_average;
-if (zbeta != nullptr) delete[] zbeta;
-if (derivMatrix != nullptr) delete[] derivMatrix;
-if (step != nullptr) delete[] step;
-if (gdiagvar != nullptr) delete[] gdiagvar;
+// if (frailty_group_events != nullptr)  delete[] frailty_group_events;
+// if (denom != nullptr) delete[] denom;
+// if (efron_wt != nullptr) delete[] efron_wt;
+// if (wt_average != nullptr) delete[] wt_average;
+// if (zbeta != nullptr) delete[] zbeta;
+// if (derivMatrix != nullptr) delete[] derivMatrix;
+// if (step != nullptr) delete[] step;
+// if (gdiagvar != nullptr) delete[] gdiagvar;
 
-Rcout << " done" <<std::endl;
+// Rcout << " done" <<std::endl;
 
 int nsummaries = 8;
 DoubleVector summary_measures(nsummaries);
