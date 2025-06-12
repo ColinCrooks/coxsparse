@@ -6,7 +6,7 @@ using namespace Rcpp;
 using namespace RcppParallel;
 //' cox_reg_sparse_hess
 //' 
-//' Description
+//' @description
 //' Implementation of a Cox proportional hazards model using 
 //' a sparse data structure. The model is fitted with cyclical 
 //' coordinate descent (after Mittal et al (2013).
@@ -14,6 +14,7 @@ using namespace RcppParallel;
 //' values and rcppParallel objects are used to make R objects
 //' threadsafe.
 //' 
+//' @details
 //' The purpose of this implementation is for fitting a Cox model
 //' to data when coxph from the survival package fails due to
 //' not enough memory to hold the model and data matrices. The
@@ -29,15 +30,6 @@ using namespace RcppParallel;
 //' A function using the same data structure to calculate profile
 //' confidence intervals with a crude search pattern is provided.
 //' 
-//' @param covrowlist_in A list in R of integer vectors of length nvar. 
-//' Each entry in the list corresponds to a covariate.
-//' Each vector contains the indices for the rows in the coval list 
-//' that correspond to that vector. Maximum value of any indices corresponds
-//' therefore to the length of coval. Entries 0 to nvar are covariates, and then
-//' from nvar to size of list will be the positions on the obs relating to 
-//' unique patient IDs that define the frailty groups if recurrent events.
-//' @param beta_in A double vector of starting values for the coefficients 
-//' of length nvar.
 //' @param obs_in An integer vector referencing for each covariate value the
 //' corresponding unique patient time in the time and outcome vectors. Of the
 //' same length as coval. The maximum value is the length of timein and timeout.
@@ -59,8 +51,12 @@ using namespace RcppParallel;
 //' occur at each unique time point. Length is the number of unique times in cohort.
 //' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 //' outcome events are observed in the cohort. Same length as OutcomeTotals.
-//' @param nvar Number of covariates
+//' @param cov_in An integer vector mapping covariates to the 
+//' corresponding covariate value row in coval sorted by time and id
+//' @param id_in An integer vector mapping unique patient IDs to the 
+//' corresponding row in observations sorted by time and id
 //' @param lambda Penalty weight to include for ridge regression: -log(sqrt(lambda)) * nvar
+//' @param theta_in An input starting value for theta or can be set to zero.
 //' @param MSTEP_MAX_ITER Maximum number of iterations
 //' @param MAX_EPS Threshold for maximum step change in liklihood for convergence. 
 //' @param threadn Number of threads to be used - caution as will crash if specify more 

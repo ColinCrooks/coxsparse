@@ -36,10 +36,9 @@ BEGIN_RCPP
 END_RCPP
 }
 // cox_reg_sparse_parallel
-DoubleVector cox_reg_sparse_parallel(List modeldata, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, IntegerVector covn_in, IntegerVector covstart_in, IntegerVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
+void cox_reg_sparse_parallel(List modeldata, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, IntegerVector covn_in, IntegerVector covstart_in, IntegerVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
 RcppExport SEXP _coxsparse_cox_reg_sparse_parallel(SEXP modeldataSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP OutcomeTotals_inSEXP, SEXP OutcomeTotalTimes_inSEXP, SEXP covn_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP MAX_EPSSEXP, SEXP threadnSEXP) {
 BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< List >::type modeldata(modeldataSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type obs_in(obs_inSEXP);
@@ -61,8 +60,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type MSTEP_MAX_ITER(MSTEP_MAX_ITERSEXP);
     Rcpp::traits::input_parameter< double >::type MAX_EPS(MAX_EPSSEXP);
     Rcpp::traits::input_parameter< long unsigned int >::type threadn(threadnSEXP);
-    rcpp_result_gen = Rcpp::wrap(cox_reg_sparse_parallel(modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn));
-    return rcpp_result_gen;
+    cox_reg_sparse_parallel(modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn);
+    return R_NilValue;
 END_RCPP
 }
 // profile_ci

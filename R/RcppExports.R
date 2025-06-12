@@ -3,7 +3,7 @@
 
 #' cox_reg_sparse_hess
 #' 
-#' Description
+#' @description
 #' Implementation of a Cox proportional hazards model using 
 #' a sparse data structure. The model is fitted with cyclical 
 #' coordinate descent (after Mittal et al (2013).
@@ -11,6 +11,7 @@
 #' values and rcppParallel objects are used to make R objects
 #' threadsafe.
 #' 
+#' @details
 #' The purpose of this implementation is for fitting a Cox model
 #' to data when coxph from the survival package fails due to
 #' not enough memory to hold the model and data matrices. The
@@ -26,15 +27,6 @@
 #' A function using the same data structure to calculate profile
 #' confidence intervals with a crude search pattern is provided.
 #' 
-#' @param covrowlist_in A list in R of integer vectors of length nvar. 
-#' Each entry in the list corresponds to a covariate.
-#' Each vector contains the indices for the rows in the coval list 
-#' that correspond to that vector. Maximum value of any indices corresponds
-#' therefore to the length of coval. Entries 0 to nvar are covariates, and then
-#' from nvar to size of list will be the positions on the obs relating to 
-#' unique patient IDs that define the frailty groups if recurrent events.
-#' @param beta_in A double vector of starting values for the coefficients 
-#' of length nvar.
 #' @param obs_in An integer vector referencing for each covariate value the
 #' corresponding unique patient time in the time and outcome vectors. Of the
 #' same length as coval. The maximum value is the length of timein and timeout.
@@ -56,8 +48,12 @@
 #' occur at each unique time point. Length is the number of unique times in cohort.
 #' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 #' outcome events are observed in the cohort. Same length as OutcomeTotals.
-#' @param nvar Number of covariates
+#' @param cov_in An integer vector mapping covariates to the 
+#' corresponding covariate value row in coval sorted by time and id
+#' @param id_in An integer vector mapping unique patient IDs to the 
+#' corresponding row in observations sorted by time and id
 #' @param lambda Penalty weight to include for ridge regression: -log(sqrt(lambda)) * nvar
+#' @param theta_in An input starting value for theta or can be set to zero.
 #' @param MSTEP_MAX_ITER Maximum number of iterations
 #' @param MAX_EPS Threshold for maximum step change in liklihood for convergence. 
 #' @param threadn Number of threads to be used - caution as will crash if specify more 
@@ -84,7 +80,7 @@ cox_reg_sparse_hess <- function(obs_in, coval_in, weights_in, timein_in, timeout
 
 #' cox_reg_sparse_parallel
 #' 
-#' Description
+#' @description
 #' Implementation of a Cox proportional hazards model using 
 #' a sparse data structure. The model is fitted with cyclical 
 #' coordinate descent (after Mittal et al (2013).
@@ -92,6 +88,7 @@ cox_reg_sparse_hess <- function(obs_in, coval_in, weights_in, timein_in, timeout
 #' values and rcppParallel objects are used to make R objects
 #' threadsafe.
 #' 
+#' @details
 #' The purpose of this implementation is for fitting a Cox model
 #' to data when coxph from the survival package fails due to
 #' not enough memory to hold the model and data matrices. The
@@ -107,15 +104,29 @@ cox_reg_sparse_hess <- function(obs_in, coval_in, weights_in, timein_in, timeout
 #' A function using the same data structure to calculate profile
 #' confidence intervals with a crude search pattern is provided.
 #' 
-#' @param covrowlist_in A list in R of integer vectors of length nvar. 
-#' Each entry in the list corresponds to a covariate.
-#' Each vector contains the indices for the rows in the coval list 
-#' that correspond to that vector. Maximum value of any indices corresponds
-#' therefore to the length of coval. Entries 0 to nvar are covariates, and then
-#' from nvar to size of list will be the positions on the obs relating to 
-#' unique patient IDs that define the frailty groups if recurrent events.
-#' @param beta_in A double vector of starting values for the coefficients 
-#' of length nvar.
+#' @param modeldata A list in R of vectors within which to retun the model output.
+#' Needs to follow this naming convention of the lists: 
+#' * Beta - double vector of length of covariates to be filled with fitted coefficients.
+#' * Frailty - double vector of length of frailty terms (e.g. number of unique patients) 
+#' to bw filled with the fitted frailty terms on linear predictor scale 
+#'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
+#' * basehaz - double vector of length of max(timeout) for baseline hazard values 
+#' for each unique observed time. calculated with the fitted coefficients and Efron weights.
+#' * cumhaz - double vector of length of max(timeout) for cumulative hazard values calculated 
+#' from the baseline hazard values.
+#' * BaseHazardEntry - double vector of max(obs) for baseline hazard at each individual observation.
+#' * cumhazEntry - double vector of max(obs) for cumulative hazard at each individual observation. 
+#' * cumhaz1year - double vector of max(obs) for cumulative hazard one year after each individual observation. 
+#' * Risk - double vector of max(obs) for exp(xb) at each individual observation.
+#' * ModelSummary - double vector of length 8 to contain individual values:
+#' ** loglik - log likelihood of the model without gamma penalty
+#' ** lik_correction - gamma correction for the loglikelihood for including frailty terms
+#' ** loglik + lik_correction - the total log likelihood of the model
+#' ** theta - the value of theta used in the model
+#' ** outer_iter - the number of outer iterations performed
+#' ** final convergence of inner loop for covariates abs(1-newlk/loglik)
+#' ** final convergence of outer loop for theta
+#' ** frailty_mean - the mean of the frailty terms so they can be centred log(mean(exp(frailty)))
 #' @param obs_in An integer vector referencing for each covariate value the
 #' corresponding unique patient time in the time and outcome vectors. Of the
 #' same length as coval. The maximum value is the length of timein and timeout.
@@ -137,35 +148,29 @@ cox_reg_sparse_hess <- function(obs_in, coval_in, weights_in, timein_in, timeout
 #' occur at each unique time point. Length is the number of unique times in cohort.
 #' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 #' outcome events are observed in the cohort. Same length as OutcomeTotals.
-#' @param nvar Number of covariates
+#' @param covn_in An integer vector mapping covariates sorted by covariate to the 
+#' corresponding covariate value row in coval sorted by time and id
+#' @param covstart_in An integer vector of the start row for each covariate in covn_in
+#' @param covend_in An integer vector of the end row for each covariate in covn_in
+#' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
+#' corresponding row in observations sorted by time and id
+#' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
+#' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 #' @param lambda Penalty weight to include for ridge regression: -log(sqrt(lambda)) * nvar
+#' @param theta_in An input starting value for theta or can be set to zero.
 #' @param MSTEP_MAX_ITER Maximum number of iterations
 #' @param MAX_EPS Threshold for maximum step change in liklihood for convergence. 
 #' @param threadn Number of threads to be used - caution as will crash if specify more 
 #' threads than available memory for copying data for each thread.
-#' @return A list of:
-#' * Beta Fitted coefficients
-#' * BaseHaz Baseline hazard values for each unique observed time
-#'   calculated with the fitted coefficients and Efron weights.
-#' * CumHaz Cumulative values from the baseline hazard values.
-#' * BaseHazardEntry Baseline hazard expanded and sorted to correspond to each 
-#'   patient time in the original data provided in timein.
-#' * CumHazAtEntry Cumulative hazard values expanded and sorted to correspond to each 
-#'   patient time in the original data provided in timein.
-#' * CumHazOneYear Cumulative hazard values expanded and sorted to correspond to one
-#'   full year each after each patient time in the original data provided in timein.
-#' * Risk The hazard (exp(xb)) for each  patient time in the original data 
-#'   provided in timein.
-#' * Frailty The frailty value for each unique ID group on linear predictor scale 
-#'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
+#' @return Void: see the model data input list for the output.
 #' @export
 cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
-    .Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn)
+    invisible(.Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn))
 }
 
 #' profile_ci
 #'
-#' Description
+#' @description
 #'
 #' The purpose of this implementation is for fitting a Cox model
 #' to data when coxph from the survival package fails due to
@@ -177,6 +182,7 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' to providing a standard package binary for multiple systems.
 #' The Makevars file therefore contains the options for this.
 #'
+#' @details
 #' A function using the same data structure to calculate profile
 #' confidence intervals with a crude search pattern is provided.
 #'
@@ -188,22 +194,18 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' values and rcppParallel objects are used to make R objects
 #' threadsafe.
 #'
-#'@param covrowlist_in A list in R of integer vectors of length nvar.
-#' Each entry in the list corresponds to a covariate.
-#' Each vector contains the indices for the rows in the coval list
-#' that correspond to that vector. Maximum value of any indices corresponds
-#' therefore to the length of coval.
 #' @param beta_in A double vector of starting values for the coefficients
 #' of length nvar.
 #' @param obs_in An integer vector referencing for each covariate value the
 #' corresponding unique patient time in the time and outcome vectors. Of the
 #' same length as coval. The maximum value is the length of timein and timeout.
-#'@param coval_in A double vector of each covariate value sorted first by
+#' @param coval_in A double vector of each covariate value sorted first by
 #' time then by patient and by order of the covariates to be included in model.
 #' Of the same longth as obs_in.
 #' @param weights_in A double vector of weights to be applied to each unique
 #' patient time point. Of the same length as timein, timeout and outcomes.
-#' @param  timein_in An integer vector of the start time for each unique patient
+#' @param frailty_in A double vector of the frailty term for each unique patient.
+#' @param timein_in An integer vector of the start time for each unique patient
 #' time row, so would be the time that a patient's corresponding
 #' covariate value starts. Of the same length as weights, timeout, and outcomes.
 #' @param timeout_in An integer vector of the end time for each unique patient
@@ -212,21 +214,29 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the
 #' corresponding unique patient time. Of the same length as timein, timeout and
 #' weights
-#'@param OutcomeTotals_in An integer vector of the total number of outcomes that
+#' @param OutcomeTotals_in An integer vector of the total number of outcomes that
 #' occur at each unique time point. Length is the number of unique times in cohort.
-#'@param OutcomeTotalTimes_in An integer vector of each unique time point that
+#' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 #' outcome events are observed in the cohort. Same length as OutcomeTotals.
-#'@param lambda Penalty weight to include for ridge regression:-log(sqrt(lambda)) * nvar
-#' @param nvar Number of covariates
-#'@param MSTEP_MAX_ITER Maximum number of iterations
+#' @param covn_in An integer vector mapping covariates sorted by covariate to the 
+#' corresponding covariate value row in coval sorted by time and id
+#' @param covstart_in An integer vector of the start row for each covariate in covn_in
+#' @param covend_in An integer vector of the end row for each covariate in covn_in
+#' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
+#' corresponding row in observations sorted by time and id
+#' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
+#' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
+#' @param lambda Penalty weight to include for ridge regression:-log(sqrt(lambda)) * nvar
+#' @param theta_in The value of theta to use in the model. This is the frailty parameter.
+#' @param MSTEP_MAX_ITER Maximum number of iterations
 #' @param decimals Precision required for confidence intervals defined by
 #' number of decimal places.
 #' @param confint_width e.g. for 95% confidence interval confint_width = 0.95.
-#'@param threadn Number of threads to be used - caution as will crash if specify more
+#' @param threadn Number of threads to be used - caution as will crash if specify more
 #' threads than available memory for copying data for each thread.
-#'@return Numeric matrix with nvar rows and lower and upper confidence intervals in 2 columns.
+#' @return Numeric matrix with nvar rows and lower and upper confidence intervals in 2 columns.
 #'
-#'@export
+#' @export
 profile_ci <- function(beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn) {
     .Call('_coxsparse_profile_ci', PACKAGE = 'coxsparse', beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn)
 }

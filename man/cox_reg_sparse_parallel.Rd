@@ -5,9 +5,8 @@
 \title{cox_reg_sparse_parallel}
 \usage{
 cox_reg_sparse_parallel(
-  covrowlist_in,
-  beta_in,
-  id_in,
+  modeldata,
+  obs_in,
   coval_in,
   weights_in,
   timein_in,
@@ -15,30 +14,53 @@ cox_reg_sparse_parallel(
   Outcomes_in,
   OutcomeTotals_in,
   OutcomeTotalTimes_in,
-  nvar,
+  covn_in,
+  covstart_in,
+  covend_in,
+  idn_in,
+  idstart_in,
+  idend_in,
   lambda,
+  theta_in,
   MSTEP_MAX_ITER,
   MAX_EPS,
   threadn
 )
 }
 \arguments{
-\item{covrowlist_in}{A list in R of integer vectors of length nvar.
-Each entry in the list corresponds to a covariate.
-Each vector contains the indices for the rows in the coval list
-that correspond to that vector. Maximum value of any indices corresponds
-therefore to the length of coval.}
+\item{modeldata}{A list in R of vectors within which to retun the model output.
+Needs to follow this naming convention of the lists:
+\itemize{
+\item Beta - double vector of length of covariates to be filled with fitted coefficients.
+\item Frailty - double vector of length of frailty terms (e.g. number of unique patients)
+to bw filled with the fitted frailty terms on linear predictor scale
+(w in xb + Zw). Exponentiate for the relative scale. No centring applied.
+\item basehaz - double vector of length of max(timeout) for baseline hazard values
+for each unique observed time. calculated with the fitted coefficients and Efron weights.
+\item cumhaz - double vector of length of max(timeout) for cumulative hazard values calculated
+from the baseline hazard values.
+\item BaseHazardEntry - double vector of max(obs) for baseline hazard at each individual observation.
+\item cumhazEntry - double vector of max(obs) for cumulative hazard at each individual observation.
+\item cumhaz1year - double vector of max(obs) for cumulative hazard one year after each individual observation.
+\item Risk - double vector of max(obs) for exp(xb) at each individual observation.
+\item ModelSummary - double vector of length 8 to contain individual values:
+** loglik - log likelihood of the model without gamma penalty
+** lik_correction - gamma correction for the loglikelihood for including frailty terms
+** loglik + lik_correction - the total log likelihood of the model
+** theta - the value of theta used in the model
+** outer_iter - the number of outer iterations performed
+** final convergence of inner loop for covariates abs(1-newlk/loglik)
+** final convergence of outer loop for theta
+** frailty_mean - the mean of the frailty terms so they can be centred log(mean(exp(frailty)))
+}}
 
-\item{beta_in}{A double vector of starting values for the coefficients
-of length nvar.}
-
-\item{id_in}{An integer vector referencing for each covariate value the
+\item{obs_in}{An integer vector referencing for each covariate value the
 corresponding unique patient time in the time and outcome vectors. Of the
 same length as coval. The maximum value is the length of timein and timeout.}
 
 \item{coval_in}{A double vector of each covariate value sorted first by
 time then by patient and by order of the covariates to be included in model.
-Of the same longth as id_in.}
+Of the same longth as obs_in.}
 
 \item{weights_in}{A double vector of weights to be applied to each unique
 patient time point. Of the same length as timein, timeout and outcomes.}
@@ -61,9 +83,23 @@ occur at each unique time point. Length is the number of unique times in cohort.
 \item{OutcomeTotalTimes_in}{An integer vector of each unique time point that
 outcome events are observed in the cohort. Same length as OutcomeTotals.}
 
-\item{nvar}{Number of covariates}
+\item{covn_in}{An integer vector mapping covariates sorted by covariate to the
+corresponding covariate value row in coval sorted by time and id}
+
+\item{covstart_in}{An integer vector of the start row for each covariate in covn_in}
+
+\item{covend_in}{An integer vector of the end row for each covariate in covn_in}
+
+\item{idn_in}{An integer vector mapping unique patient IDs sorted by ID to the
+corresponding row in observations sorted by time and id}
+
+\item{idstart_in}{An integer vector of the start row for each unique patient ID in idn_in}
+
+\item{idend_in}{An integer vector of the end row for each unique patient ID in idn_in}
 
 \item{lambda}{Penalty weight to include for ridge regression: -log(sqrt(lambda)) * nvar}
+
+\item{theta_in}{An input starting value for theta or can be set to zero.}
 
 \item{MSTEP_MAX_ITER}{Maximum number of iterations}
 
@@ -73,24 +109,9 @@ outcome events are observed in the cohort. Same length as OutcomeTotals.}
 threads than available memory for copying data for each thread.}
 }
 \value{
-A list of:
-\itemize{
-\item Beta Fitted coefficients
-\item BaseHaz Baseline hazard values for each unique observed time
-calculated with the fitted coefficients and Efron weights.
-\item CumHaz Cumulative values from the baseline hazard values.
-\item BaseHazardEntry Baseline hazard expanded and sorted to correspond to each
-patient time in the original data provided in timein.
-\item CumHazAtEntry Cumulative hazard values expanded and sorted to correspond to each
-patient time in the original data provided in timein.
-\item CumHazOneYear Cumulative hazard values expanded and sorted to correspond to one
-full year each after each patient time in the original data provided in timein.
-\item Risk The hazard (exp(xb)) for each  patient time in the original data
-provided in timein.
-}
+Void: see the model data input list for the output.
 }
 \description{
-Description
 Implementation of a Cox proportional hazards model using
 a sparse data structure. The model is fitted with cyclical
 coordinate descent (after Mittal et al (2013).

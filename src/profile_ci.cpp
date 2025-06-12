@@ -6,7 +6,7 @@ using namespace Rcpp;
 using namespace RcppParallel;
 //' profile_ci
 //'
-//' Description
+//' @description
 //'
 //' The purpose of this implementation is for fitting a Cox model
 //' to data when coxph from the survival package fails due to
@@ -18,6 +18,7 @@ using namespace RcppParallel;
 //' to providing a standard package binary for multiple systems.
 //' The Makevars file therefore contains the options for this.
 //'
+//' @details
 //' A function using the same data structure to calculate profile
 //' confidence intervals with a crude search pattern is provided.
 //'
@@ -29,22 +30,18 @@ using namespace RcppParallel;
 //' values and rcppParallel objects are used to make R objects
 //' threadsafe.
 //'
-//'@param covrowlist_in A list in R of integer vectors of length nvar.
-//' Each entry in the list corresponds to a covariate.
-//' Each vector contains the indices for the rows in the coval list
-//' that correspond to that vector. Maximum value of any indices corresponds
-//' therefore to the length of coval.
 //' @param beta_in A double vector of starting values for the coefficients
 //' of length nvar.
 //' @param obs_in An integer vector referencing for each covariate value the
 //' corresponding unique patient time in the time and outcome vectors. Of the
 //' same length as coval. The maximum value is the length of timein and timeout.
-//'@param coval_in A double vector of each covariate value sorted first by
+//' @param coval_in A double vector of each covariate value sorted first by
 //' time then by patient and by order of the covariates to be included in model.
 //' Of the same longth as obs_in.
 //' @param weights_in A double vector of weights to be applied to each unique
 //' patient time point. Of the same length as timein, timeout and outcomes.
-//' @param  timein_in An integer vector of the start time for each unique patient
+//' @param frailty_in A double vector of the frailty term for each unique patient.
+//' @param timein_in An integer vector of the start time for each unique patient
 //' time row, so would be the time that a patient's corresponding
 //' covariate value starts. Of the same length as weights, timeout, and outcomes.
 //' @param timeout_in An integer vector of the end time for each unique patient
@@ -53,21 +50,29 @@ using namespace RcppParallel;
 //' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the
 //' corresponding unique patient time. Of the same length as timein, timeout and
 //' weights
-//'@param OutcomeTotals_in An integer vector of the total number of outcomes that
+//' @param OutcomeTotals_in An integer vector of the total number of outcomes that
 //' occur at each unique time point. Length is the number of unique times in cohort.
-//'@param OutcomeTotalTimes_in An integer vector of each unique time point that
+//' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 //' outcome events are observed in the cohort. Same length as OutcomeTotals.
-//'@param lambda Penalty weight to include for ridge regression:-log(sqrt(lambda)) * nvar
-//' @param nvar Number of covariates
-//'@param MSTEP_MAX_ITER Maximum number of iterations
+//' @param covn_in An integer vector mapping covariates sorted by covariate to the 
+//' corresponding covariate value row in coval sorted by time and id
+//' @param covstart_in An integer vector of the start row for each covariate in covn_in
+//' @param covend_in An integer vector of the end row for each covariate in covn_in
+//' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
+//' corresponding row in observations sorted by time and id
+//' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
+//' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
+//' @param lambda Penalty weight to include for ridge regression:-log(sqrt(lambda)) * nvar
+//' @param theta_in The value of theta to use in the model. This is the frailty parameter.
+//' @param MSTEP_MAX_ITER Maximum number of iterations
 //' @param decimals Precision required for confidence intervals defined by
 //' number of decimal places.
 //' @param confint_width e.g. for 95% confidence interval confint_width = 0.95.
-//'@param threadn Number of threads to be used - caution as will crash if specify more
+//' @param threadn Number of threads to be used - caution as will crash if specify more
 //' threads than available memory for copying data for each thread.
-//'@return Numeric matrix with nvar rows and lower and upper confidence intervals in 2 columns.
+//' @return Numeric matrix with nvar rows and lower and upper confidence intervals in 2 columns.
 //'
-//'@export
+//' @export
 // [[Rcpp::export]]
  NumericMatrix profile_ci(
      DoubleVector beta_in,
@@ -95,13 +100,11 @@ using namespace RcppParallel;
  )
  {
    Rcpp::Rcout.precision(10);
-   // List covrowlist(covrowlist_in);
    omp_set_dynamic(0);
   // Explicitly disable dynamic teams
    omp_set_num_threads(threadn);
-  // Use 8 threads for all consecutive parallel regions
-   
-  // Vectors from R index begin from 1. Need to convert to 0 index for C++and comparisons
+
+     // Vectors from R index begin from 1. Need to convert to 0 index for C++and comparisons
    
    int ntimes = max(timeout_in);
      
@@ -146,7 +149,6 @@ using namespace RcppParallel;
    RVector<int> OutcomeTotals(OutcomeTotals_in);
    RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
    RVector<int> obs(obs_in);
-//   RVector<int> id(id_in);
    RVector<int> timein(timein_in);
    RVector<int> timeout(timeout_in);
    RVector<int>  covn(covn_in);
@@ -211,68 +213,6 @@ using namespace RcppParallel;
      newlk += lik_correction;
    }
 
-//    
-//    
-//    for (int i = 0; i < nvar + maxid; i++)
-//    { /* per observation time calculations */
-//      // IntegerVector covrows_in = covrowlist[i];
-//      // RVector<int> covrows(covrows_in);
-//      double beta_local = i < nvar ? beta[i] : frailty[i];
-//      int rowN = covrows.size();
-// 
-// #pragma omp parallel  default(none) shared(i, covstart, covend, covn, maxobs, coval, beta_local,  obs, zbeta) //reduction(+:zbeta[:maxobs])
-// {
-//     double *zbeta_private = new double [maxobs];
-//     for (int ir = 0; ir < maxobs; ir++) zbeta_private[(ir)] = 0.0;
-//     
-// #pragma omp for
-//     for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
-//     {
-//       int row = covn[covi] - 1; // R_xlen_t is signed long, size_t is unsigned. R vectors use signed so all numbers should be below 2,147,483,647
-//       int rowobs =  obs[row] - 1 ;
-//       double covali =  coval[row] ;
-//       zbeta_private[rowobs] += beta_local * covali ;
-//     }
-//     
-//     for (int rowobs = 0; rowobs < maxobs ; rowobs++)
-//     {
-// #pragma omp atomic
-//       zbeta[rowobs] += zbeta_private[rowobs];
-//     }
-//     delete[] zbeta_private;
-//     
-// }
-//    }
-    
-    // int size = omp_get_num_threads(); // get total number of processes
-    // int rank = omp_get_thread_num(); // get rank of current ( range 0 -> (num_threads - 1) )
-    // 
-    // 
-    // for (int covi = (rank * rowN / size); covi < ((rank + 1) * rowN / size) ; covi++)
-    // {
-    //   int row = covrows[covi] - 1; // R_xlen_t is signed long, size_t is unsigned. R vectors use signed
-    //   int rowobs = obs[row] - 1;
-    //   
-    //   double covali = i < nvar ? coval[row] : 1.0;
-    //   zbeta_private[rowobs] += beta_local * covali;
-  //     
-  //     if (Outcomes[rowobs] > 0 ) {
-  //       if ( i >= nvar ) {
-  // #pragma omp atomic          
-  //         frailty_group_events[i - nvar] ++; // i is unique ID at this point so can write directly
-  //       }
-  //     }
-  //   }
-  //   for (int rowobs = 0; rowobs < maxobs ; rowobs++)
-  //   {
-  // #pragma omp atomic
-  //     zbeta[rowobs] += zbeta_private[rowobs];
-  //   }
-  //   delete[] zbeta_private;
-
-   
-   
-   
    
 #pragma omp parallel default(none) shared(wt_average, timeout,  weights,  Outcomes ,ntimes, maxobs)
 {  
@@ -352,10 +292,7 @@ for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTi
     denom_private[ir] = 0.0;
     efron_wt_private[ir] = 0.0;
   }
-  //int size = omp_get_num_threads(); // get total number of processes
-  //int rank = omp_get_thread_num(); // get rank of current ( range 0 -> (num_threads - 1) )
-  
-  //for (int rowobs = (rank * maxobs / size); rowobs < ((rank + 1) * maxobs / size) ; rowobs++)
+
 #pragma omp for
   for (int rowobs = 0; rowobs < maxobs; rowobs++)
   {
@@ -411,14 +348,12 @@ for(int r = OutcomeTotalTimes.size() - 1 ; r >=0 ; r--)
 //Rcout << " d2sum " << d2sum << " newlk " << newlk << std::endl;
 
 NumericMatrix confinterval(nvar, 2);
-double threshold = R::qchisq(confint_width, 1,true, false )/2;
+double threshold = R::qchisq(confint_width, 1,true, false );
 
 Rcout << "Coefficient" << "\t" << "Lower "<< confint_width*100<<"% CI" <<  "\t" << "Upper "<< confint_width*100<<"% CI" << "\n";
 for (int i = 0; i < nvar; i++)
 {
-  // IntegerVector covrows_in = covrowlist[i];
-  // RVector<int> covrows(covrows_in);
-  
+
   // lower beta
   confinterval(i,0) = beta[i];
   confinterval(i,1) = beta[i];
@@ -431,8 +366,7 @@ for (int i = 0; i < nvar; i++)
     int iter = 0;
     while((iter == 0) | (std::isfinite(updatelk) && (abs((-2)*(updatelk -newlk)) < threshold ) && (iter < MSTEP_MAX_ITER)))
     {
-      // for (int ir = 0; ir < maxobs; ir++) zbeta_updated[ir] = zbeta[ir];
-      
+
       confinterval(i,0) = confinterval(i,0) - stepi;
       dif = beta[i] - confinterval(i,0); // replicating beta -= dif - > confinterval = beta - dif -> dif = beta - confinterval
       updatelk = newlk + d2sum;
@@ -444,7 +378,6 @@ for (int i = 0; i < nvar; i++)
       }
       
       
-//      Rcout << "updatelk " << updatelk << " newlk " << newlk << " threshold " << threshold << " dif " << dif << " lowerCI " << confinterval(i,0) << std::endl;
       double updatelk_private = 0.0;
 #pragma omp parallel  default(none) reduction(+:updatelk_private)  shared(denom_update,efron_wt_update,zbeta,covstart, covend,covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
 {
@@ -457,9 +390,6 @@ for (int i = 0; i < nvar; i++)
     efron_wt_private[ir] = 0.0;
   }
   
-  //  int size = omp_get_num_threads(); // get total number of processes
-  //  int rank = omp_get_thread_num(); // get rank of current ( range 0 -> (num_threads - 1) )
-  //for (int covi = covstart[i] - 1 + ((rank * rowN / size)); covi < covstart[i] + (((rank + 1) * rowN / size)) ; covi++)
 #pragma omp for
   for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
   {
@@ -501,10 +431,6 @@ for (int i = 0; i < nvar; i++)
 
 updatelk -= updatelk_private;
 
-      //Rcout << "updatelk " << updatelk << " newlk " << newlk << " threshold " << threshold << " dif " << dif << " lowerCI " << confinterval(i,0) << std::endl;
-      
-
-    //      double dsum2 = 0;
       for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--)
       {
         int time = OutcomeTotalTimes[r] - 1;
@@ -514,10 +440,8 @@ updatelk -= updatelk_private;
           / (double)OutcomeTotals[r];
           double d2 = denom_update[time] - (temp * efron_wt_update[time]); /* sum(denom) adjusted for tied deaths*/
             updatelk -= wt_average[time]*safelog(d2); // track this sum to remove nvar from newlk at start of next iteration
- //           dsum2 += wt_average[time]*safelog(d2);
         }
       }
-      Rcout << " updatelk " << updatelk << " newlk " << newlk << " threshold " << threshold << " dif " << dif << " lowerCI " << confinterval(i,0) << std::endl;
       iter++;
       Rcout << '.';
     }
@@ -557,9 +481,6 @@ updatelk -= updatelk_private;
     efron_wt_private[ir] = 0.0;
   }
   
-  //  int size = omp_get_num_threads(); // get total number of processes
-  //  int rank = omp_get_thread_num(); // get rank of current ( range 0 -> (num_threads - 1) )
-  //for (int covi = covstart[i] - 1 + ((rank * rowN / size)); covi < covstart[i] + (((rank + 1) * rowN / size)) ; covi++)
 #pragma omp for
   for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
   {

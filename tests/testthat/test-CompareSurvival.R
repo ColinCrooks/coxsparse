@@ -141,9 +141,10 @@ CoxRegListParallelbeta[['BaseHazardEntry']] <- vector('double',max(obs))
 CoxRegListParallelbeta[['cumhazEntry']] <- vector('double',max(obs))
 CoxRegListParallelbeta[['cumhaz1year']] <- vector('double',max(obs))
 CoxRegListParallelbeta[['Risk']] <- vector('double',max(obs))
+CoxRegListParallelbeta[['ModelSummary']] <- vector('double',8)
 
 Sys.time()
-CoxRegListParallelbeta[['ModelSummary']] <- cox_reg_sparse_parallel(modeldata = CoxRegListParallelbeta,#beta_in = CoxRegListParallelbeta[['Beta']] ,
+cox_reg_sparse_parallel(modeldata = CoxRegListParallelbeta,#beta_in = CoxRegListParallelbeta[['Beta']] ,
                                                                     #frailty_in = CoxRegListParallelbeta[['Frailty']],
                                                                     #basehaz_in  = CoxRegListParallelbeta[['basehaz']],
                                                                     #cumhaz_in = CoxRegListParallelbeta[['cumhaz']] ,
@@ -168,7 +169,7 @@ CoxRegListParallelbeta[['ModelSummary']] <- cox_reg_sparse_parallel(modeldata = 
                                                     lambda = lambda,
                                                     theta_in = 0,
                                                     MSTEP_MAX_ITER = 100,
-                                                    MAX_EPS = 1e-6,
+                                                    MAX_EPS = 1e-10,
                                                     threadn = 32)
 Sys.time() # 17 s
 
@@ -370,6 +371,7 @@ CoxRegListParallelbetanoFrailty[['BaseHazardEntry']] <- vector('double',max(obs)
 CoxRegListParallelbetanoFrailty[['cumhazEntry']] <- vector('double',max(obs))
 CoxRegListParallelbetanoFrailty[['cumhaz1year']] <- vector('double',max(obs))
 CoxRegListParallelbetanoFrailty[['Risk']] <- vector('double',max(obs))
+CoxRegListParallelbetanoFrailty[['ModelSummary']] <- vector('double',8)
 
 weights <- runif(length(Outcomes))
 Sys.time()
@@ -377,7 +379,7 @@ Sys.time()
 coxnofrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex  ,weights = rep(1,length(weights)),  data = rats.dt)
 
 
-CoxRegListParallelbetanoFrailty[['ModelSummary']] <- cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetanoFrailty, #beta_in = CoxRegListParallelbetanoFrailty[['Beta']] ,
+cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetanoFrailty, #beta_in = CoxRegListParallelbetanoFrailty[['Beta']] ,
                                                            #frailty_in = CoxRegListParallelbetanoFrailty[['Frailty']],
                                                            #basehaz_in  = CoxRegListParallelbetanoFrailty[['basehaz']],
                                                            #cumhaz_in = CoxRegListParallelbetanoFrailty[['cumhaz']] ,
@@ -405,8 +407,8 @@ CoxRegListParallelbetanoFrailty[['ModelSummary']] <- cox_reg_sparse_parallel(mod
                                                          MAX_EPS = 1e-10,
                                                          threadn = 32)
   
-
-# expect_setequal(trunc(c(coef(coxnofrail)),10), trunc(c(CoxRegListParallelbetanoFrailty$Beta),10))
+names(CoxRegListParallelbetanoFrailty$Beta) <- c('rx', 'sex')
+ expect_equal(c(coef(coxnofrail)), c(CoxRegListParallelbetanoFrailty$Beta), tolerance = 1e-8)
 
 
 # 
@@ -419,7 +421,7 @@ coxfrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex + frailty(id, tra
 # rats.dt[,wt := wt -mean(wt)]
 # coxfrail$coxlist1$first/coxfrail$coxlist1$second
 
-discoxfrail <- discfrail::npdf_cox( Surv( stop, event) ~rx + sex, groups=id, data=rats.dt, K = 1, eps_conv=10^-4)
+#discoxfrail <- discfrail::npdf_cox( Surv( stop, event) ~rx + sex, groups=id, data=rats.dt, K = 1, eps_conv=10^-4)
 #https://github.com/therneau/survival/blob/master/src/coxfit5.c
 
 #Frailty(id)
@@ -438,13 +440,14 @@ CoxRegListParallelbetaFrailty[['BaseHazardEntry']] <- vector('double',max(obs))
 CoxRegListParallelbetaFrailty[['cumhazEntry']] <- vector('double',max(obs))
 CoxRegListParallelbetaFrailty[['cumhaz1year']] <- vector('double',max(obs))
 CoxRegListParallelbetaFrailty[['Risk']] <- vector('double',max(obs))
+CoxRegListParallelbetaFrailty[['ModelSummary']] <- vector('double',8)
 
 weights <- runif(length(Outcomes))
 Sys.time()
 history <- list()
 # i <- 1
 # while( done == 0) {
-CoxRegListParallelbetaFrailty[['ModelSummary']] <- cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailty,
+cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailty,
                                                           #beta_in = CoxRegListParallelbetaFrailty[['Beta']] ,
                                                           #frailty_in = CoxRegListParallelbetaFrailty[['Frailty']],
                                                            #basehaz_in  = CoxRegListParallelbetaFrailty[['basehaz']],
@@ -511,6 +514,14 @@ par(mfrow = c(2,2))
 hist(coxfrail$frail)
 hist(CoxRegListParallelbetaFrailty$Frailty)
 hist(CoxRegListParallelbetaFrailty$Frailty - log(mean(exp(CoxRegListParallelbetaFrailty$Frailty))))
+
+rxloglik <- function(beta,max,rats.dt) {
+  temp <- survival::coxph(Surv(start, stop, event) ~ offset(beta*rx) + sex + frailty(id, trace =F) ,weights = rep(1,length(weights)),  data = rats.dt)
+  loglikratio <- 2*(max - temp$loglik[2])
+  list("-2LLR" = loglikratio)
+}
+
+#emplik::findUL(fun = rxloglik, MLE = coxfrail$coefficients[1], max = coxfrail$loglik[2], rats.dt = rats.dt)
 
 
 set.seed(235739801)
