@@ -3,7 +3,7 @@
 #include <omp.h>
 #include <RcppParallel.h>
 using namespace Rcpp;
-using namespace RcppParallel;
+//using namespace RcppParallel;
 //' profile_ci
 //'
 //' @description
@@ -141,22 +141,22 @@ using namespace RcppParallel;
    for (int ir = 0; ir < maxid; ir++)  frailty_group_events[ir] = 0;
    
    /* Wrap all R objects to make thread safe for read and writing  */
-   RVector<double> beta(beta_in);
-   RVector<double> coval(coval_in);
-   RVector<double> weights(weights_in);
-   RVector<double> frailty(frailty_in);
-   RVector<int> Outcomes(Outcomes_in);
-   RVector<int> OutcomeTotals(OutcomeTotals_in);
-   RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
-   RVector<int> obs(obs_in);
-   RVector<int> timein(timein_in);
-   RVector<int> timeout(timeout_in);
-   RVector<int>  covn(covn_in);
-   RVector<int>  covstart(covstart_in);
-   RVector<int>  covend(covend_in);
-   RVector<int>  idn(idn_in);
-   RVector<int>  idstart(idstart_in);
-   RVector<int>  idend(idend_in);
+   RcppParallel::RVector<double> beta(beta_in);
+   RcppParallel::RVector<double> coval(coval_in);
+   RcppParallel::RVector<double> weights(weights_in);
+   RcppParallel::RVector<double> frailty(frailty_in);
+   RcppParallel::RVector<int> Outcomes(Outcomes_in);
+   RcppParallel::RVector<int> OutcomeTotals(OutcomeTotals_in);
+   RcppParallel::RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
+   RcppParallel::RVector<int> obs(obs_in);
+   RcppParallel::RVector<int> timein(timein_in);
+   RcppParallel::RVector<int> timeout(timeout_in);
+   RcppParallel::RVector<int>  covn(covn_in);
+   RcppParallel::RVector<int>  covstart(covstart_in);
+   RcppParallel::RVector<int>  covend(covend_in);
+   RcppParallel::RVector<int>  idn(idn_in);
+   RcppParallel::RVector<int>  idstart(idstart_in);
+   RcppParallel::RVector<int>  idend(idend_in);
    
    double step = 1/pow(10,decimals);
    double  d2sum = 0.0;

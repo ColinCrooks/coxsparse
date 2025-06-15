@@ -1,8 +1,8 @@
-#include <Rcpp.h>
+//#include <Rcpp.h>
 #include <omp.h>
 #include <RcppParallel.h>
 #include "utils.h"
-using namespace Rcpp;
+//using namespace Rcpp;
 using namespace RcppParallel;
 //' cox_reg_sparse_hess
 //' 
@@ -78,8 +78,7 @@ using namespace RcppParallel;
 //'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
 //' @export
 // [[Rcpp::export]]
-List cox_reg_sparse_hess(//DoubleVector beta_in,
-                              IntegerVector obs_in,
+void cox_reg_sparse_hess(IntegerVector obs_in,
                               DoubleVector  coval_in,
                               DoubleVector  weights_in,
                               IntegerVector timein_in ,
@@ -303,15 +302,15 @@ List cox_reg_sparse_hess(//DoubleVector beta_in,
   
   
 
-return List::create(_["Loglik"] = loglik + lik_correction,
-                    _["Beta"] = beta,
-                 //   _["BaseHaz"] = basehaz,
-                //    _["CumHaz"] = cumhaz,
-                //    _["BaseHazardAtEntry"] = BaseHazardEntry,
-                //    _["CumHazAtEntry"] = cumhazEntry,
-                //    _["CumHazOneYear"] = cumhaz1year,
-                //    _["Risk"] = Risk,
-                    _["Frailty"] = frailty,
-                    _["Theta"] = theta);
+// return Rcpp::List::create(_["Loglik"] = loglik + lik_correction,
+//                     _["Beta"] = beta,
+//                  //   _["BaseHaz"] = basehaz,
+//                 //    _["CumHaz"] = cumhaz,
+//                 //    _["BaseHazardAtEntry"] = BaseHazardEntry,
+//                 //    _["CumHazAtEntry"] = cumhazEntry,
+//                 //    _["CumHazOneYear"] = cumhaz1year,
+//                 //    _["Risk"] = Risk,
+//                     _["Frailty"] = frailty,
+//                     _["Theta"] = theta);
 
 }

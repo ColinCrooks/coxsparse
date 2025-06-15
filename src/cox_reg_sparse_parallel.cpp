@@ -3,7 +3,7 @@
 #include <RcppParallel.h>
 #include "utils.h"
 using namespace Rcpp;
-using namespace RcppParallel;
+//using namespace RcppParallel;
 //' cox_reg_sparse_parallel
 //' 
 //' @description
@@ -92,25 +92,25 @@ using namespace RcppParallel;
 //' @export
 // [[Rcpp::export]]
 void cox_reg_sparse_parallel(List modeldata,
-                              IntegerVector obs_in,
-                              DoubleVector  coval_in,
-                              DoubleVector  weights_in,
-                              IntegerVector timein_in ,
-                              IntegerVector timeout_in ,
-                              IntegerVector Outcomes_in ,
-                              IntegerVector OutcomeTotals_in ,
-                              IntegerVector OutcomeTotalTimes_in,
-                              IntegerVector covn_in,
-                              IntegerVector covstart_in,
-                              IntegerVector covend_in,
-                              IntegerVector idn_in,
-                              IntegerVector idstart_in,
-                              IntegerVector idend_in,
-                              double lambda,
-                              double theta_in ,
-                              int MSTEP_MAX_ITER,
-                              double MAX_EPS,
-                              long unsigned int threadn) {
+                             IntegerVector obs_in,
+                             DoubleVector  coval_in,
+                             DoubleVector  weights_in,
+                             IntegerVector timein_in ,
+                             IntegerVector timeout_in ,
+                             IntegerVector Outcomes_in ,
+                             IntegerVector OutcomeTotals_in ,
+                             IntegerVector OutcomeTotalTimes_in,
+                             IntegerVector covn_in,
+                             IntegerVector covstart_in,
+                             IntegerVector covend_in,
+                             IntegerVector idn_in,
+                             IntegerVector idstart_in,
+                             IntegerVector idend_in,
+                             double lambda,
+                             double theta_in ,
+                             int MSTEP_MAX_ITER,
+                             double MAX_EPS,
+                             long unsigned int threadn) {
   omp_set_dynamic(0);     // Explicitly disable dynamic teams
   omp_set_num_threads(threadn); // Use 8 threads for all consecutive parallel regions
 
@@ -177,31 +177,31 @@ void cox_reg_sparse_parallel(List modeldata,
   DoubleVector Risk_in = modeldata["Risk"];
   DoubleVector ModelSummary = modeldata["ModelSummary"];
   
-  RVector<double> coval(coval_in);
-  RVector<double> weights(weights_in);
-  RVector<int> Outcomes(Outcomes_in);
-  RVector<int> OutcomeTotals(OutcomeTotals_in);
-  RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
-  RVector<int> obs(obs_in);
-  RVector<int> timein(timein_in);
-  RVector<int> timeout(timeout_in);
-  RVector<int>  covn(covn_in);
-  RVector<int>  covstart(covstart_in);
-  RVector<int>  covend(covend_in);
-  RVector<int>  idn(idn_in);
-  RVector<int>  idstart(idstart_in);
-  RVector<int>  idend(idend_in);
+  RcppParallel::RVector<double> coval(coval_in);
+  RcppParallel::RVector<double> weights(weights_in);
+  RcppParallel::RVector<int> Outcomes(Outcomes_in);
+  RcppParallel::RVector<int> OutcomeTotals(OutcomeTotals_in);
+  RcppParallel::RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
+  RcppParallel::RVector<int> obs(obs_in);
+  RcppParallel::RVector<int> timein(timein_in);
+  RcppParallel::RVector<int> timeout(timeout_in);
+  RcppParallel::RVector<int>  covn(covn_in);
+  RcppParallel::RVector<int>  covstart(covstart_in);
+  RcppParallel::RVector<int>  covend(covend_in);
+  RcppParallel::RVector<int>  idn(idn_in);
+  RcppParallel::RVector<int>  idstart(idstart_in);
+  RcppParallel::RVector<int>  idend(idend_in);
   
 //vectors for returning calculated results to avoid copying into list for return.
 //To be zeroed before use
-  RVector<double> cumhazEntry(cumhazEntry_in);
-  RVector<double> BaseHazardEntry(BaseHazardEntry_in);
-  RVector<double> cumhaz1year(cumhaz1year_in);
-  RVector<double> Risk(Risk_in);
-  RVector<double> basehaz(basehaz_in);
-  RVector<double> cumhaz(cumhaz_in);
-  RVector<double> beta(beta_in);
-  RVector<double> frailty(frailty_in);
+  RcppParallel::RVector<double> cumhazEntry(cumhazEntry_in);
+  RcppParallel::RVector<double> BaseHazardEntry(BaseHazardEntry_in);
+  RcppParallel::RVector<double> cumhaz1year(cumhaz1year_in);
+  RcppParallel::RVector<double> Risk(Risk_in);
+  RcppParallel::RVector<double> basehaz(basehaz_in);
+  RcppParallel::RVector<double> cumhaz(cumhaz_in);
+  RcppParallel::RVector<double> beta(beta_in);
+  RcppParallel::RVector<double> frailty(frailty_in);
   
   int iter_theta = 0;
   double inner_EPS = 1e-5;
@@ -755,8 +755,10 @@ void cox_reg_sparse_parallel(List modeldata,
         
       for (int ir = 0; ir <= iter_theta; ir ++) 
       {
+        double theta_convergence = (ir < 1) ? 0 : fabs(1.0 - (thetalkl_history[ir] / thetalkl_history[ir-1]));
         Rcout << " iter_theta " << ir << " theta " << theta_history[ir] << " lkl " << thetalkl_history[ir] <<
-            " done " << done << "convergence theta " << fabs(1 - thetalkl_history[ir] / thetalkl_history[ir - 1]) << std::endl;
+            " done " << done << "convergence theta " << 
+              theta_convergence << std::endl;
       }
         
       if(iter_theta == 0) {
@@ -1036,7 +1038,7 @@ void cox_reg_sparse_parallel(List modeldata,
   ModelSummary[3] = theta;
   ModelSummary[4] = outer_iter;
   ModelSummary[5] = fabs(1.0 - (newlk / loglik));
-  ModelSummary[6] = recurrent == 0 ? fabs(1.0 - (newlk / loglik)) : fabs(1.0 - (thetalkl_history[iter_theta]/thetalkl_history[iter_theta-1]));
+  ModelSummary[6] = iter_theta < 2 ? fabs(1.0 - (newlk / loglik)) : fabs(1.0 - (thetalkl_history[iter_theta-1]/thetalkl_history[iter_theta-2]));
   ModelSummary[7] = frailty_mean;
 
   Rcout << " Returning : " ;
