@@ -1036,7 +1036,7 @@ void cox_reg_sparse_parallel(List modeldata,
   ModelSummary[3] = theta;
   ModelSummary[4] = outer_iter;
   ModelSummary[5] = fabs(1.0 - (newlk / loglik));
-  ModelSummary[6] = fabs(1.0 - (thetalkl_history[iter_theta]/thetalkl_history[iter_theta-1]));
+  ModelSummary[6] = recurrent == 0 ? fabs(1.0 - (newlk / loglik)) : fabs(1.0 - (thetalkl_history[iter_theta]/thetalkl_history[iter_theta-1]));
   ModelSummary[7] = frailty_mean;
 
   Rcout << " Returning : " ;
