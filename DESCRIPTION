@@ -12,13 +12,13 @@ Authors@R: c(
   )
 Description: Fits a Cox proportional hazards model to sparse data using cyclical coordinate descent and parallelised (after Mittal et al (2013).
 License: GPL (>= 2)
-Imports: Rcpp (>= 1.0.14), RcppParallel (>= 5.1.10), survival, data.table
+Imports: RcppParallel (>= 5.1.10)
 LinkingTo: Rcpp, RcppParallel
 Roxygen: list(markdown = TRUE)
 Byte-Compile: yes
 SystemRequirements: GNU make
 Suggests: 
-    testthat (>= 3.0.0)
+   survival,   Rcpp (>= 1.0.14),testthat (>= 3.0.0), data.table
 Config/testthat/edition: 3
 Encoding: UTF-8
 RoxygenNote: 7.3.2

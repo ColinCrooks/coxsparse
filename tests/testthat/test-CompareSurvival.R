@@ -429,7 +429,7 @@ coxfrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex + frailty(id, tra
 
 setThreadOptions(numThreads = 32)
 set.seed(235739801)
-lambda =0.1
+lambda =0
 CoxRegListParallelbetaFrailty <- list()
 
 CoxRegListParallelbetaFrailty[['Beta']] <- vector('double',length(covstart))
@@ -553,3 +553,80 @@ rbind(c(confint(coxfrail,type='profile')) , c(profileCI))
 expect_equal(c(confint(coxfrail,type='profile')),c(profileCI), tolerance = 0.2)
 
 ###################################################################################
+
+lambda =0.1
+coxfrailpenal <- survival::coxph(Surv(start, stop, event) ~ ridge(rx,sex, theta = 1/lambda, scale = F) + frailty(id, trace =T) ,weights = rep(1,length(weights)),  data = rats.dt,model = T)
+
+# rats.dt[, cumhz := data.table::setDT(basehaz(coxfrail,centered = F))[rats.dt[,.(stop)], , on = c('time' = 'stop')]$hazard]
+# rats.dt[,wt := ((sum(event))/(sum(cumhz))), by = id]
+# rats.dt[,wt := wt -(exp((wt))/exp((wt) - 1))]
+# rats.dt[,wt := wt -mean(wt)]
+# coxfrail$coxlist1$first/coxfrail$coxlist1$second
+
+#discoxfrail <- discfrail::npdf_cox( Surv( stop, event) ~rx + sex, groups=id, data=rats.dt, K = 1, eps_conv=10^-4)
+#https://github.com/therneau/survival/blob/master/src/coxfit5.c
+
+#Frailty(id)
+
+
+set.seed(235739801)
+
+CoxRegListParallelbetaFrailtypenal <- list()
+
+CoxRegListParallelbetaFrailtypenal[['Beta']] <- vector('double',length(covstart))
+CoxRegListParallelbetaFrailtypenal[['Frailty']] <- vector('double',length(idstart))
+CoxRegListParallelbetaFrailtypenal[['basehaz']] <- vector('double',max(timeout))
+CoxRegListParallelbetaFrailtypenal[['cumhaz']] <- vector('double',max(timeout))
+CoxRegListParallelbetaFrailtypenal[['BaseHazardEntry']] <- vector('double',max(obs))
+CoxRegListParallelbetaFrailtypenal[['cumhazEntry']] <- vector('double',max(obs))
+CoxRegListParallelbetaFrailtypenal[['cumhaz1year']] <- vector('double',max(obs))
+CoxRegListParallelbetaFrailtypenal[['Risk']] <- vector('double',max(obs))
+CoxRegListParallelbetaFrailtypenal[['ModelSummary']] <- vector('double',8)
+
+weights <- runif(length(Outcomes))
+Sys.time()
+history <- list()
+# i <- 1
+# while( done == 0) {
+cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailtypenal,
+                        #beta_in = CoxRegListParallelbetaFrailty[['Beta']] ,
+                        #frailty_in = CoxRegListParallelbetaFrailty[['Frailty']],
+                        #basehaz_in  = CoxRegListParallelbetaFrailty[['basehaz']],
+                        #cumhaz_in = CoxRegListParallelbetaFrailty[['cumhaz']] ,
+                        #BaseHazardEntry_in = CoxRegListParallelbetaFrailty[['BaseHazardEntry']],
+                        #cumhazEntry_in = CoxRegListParallelbetaFrailty[['cumhazEntry']],
+                        #cumhaz1year_in = CoxRegListParallelbetaFrailty[['cumhaz1year']],
+                        #Risk_in = CoxRegListParallelbetaFrailty[['Risk']] ,
+                        obs_in = obs,                                                   
+                        Outcomes_in = Outcomes,
+                        OutcomeTotals_in = OutcomesTotalUnique,
+                        OutcomeTotalTimes_in = OutcomesTotalTimes,
+                        timein_in = timein,
+                        timeout_in = timeout,
+                        weights_in = rep(1,length(weights)),
+                        coval_in = coval,
+                        covn_in = covn,
+                        covstart_in = covstart,
+                        covend_in = covend,
+                        idn_in = idn,
+                        idstart_in = idstart,
+                        idend_in = idend,
+                        lambda = lambda,
+                        theta_in = 0,
+                        MSTEP_MAX_ITER = 20,
+                        MAX_EPS = 1e-9,
+                        threadn = 32)
+
+
+rbind(coef(coxnofrail),
+      CoxRegListParallelbetanoFrailty$Beta,
+      coef(coxfrail),
+      CoxRegListParallelbetaFrailty$Beta,
+      coef(coxfrailpenal),
+      CoxRegListParallelbetaFrailtypenal$Beta
+)
+names(CoxRegListParallelbetaFrailtypenal$Beta) <- c('ridge(rx)', 'ridge(sex)')
+expect_equal(CoxRegListParallelbetaFrailtypenal$Beta,
+             coxfrailpenal$coefficients,tolerance = 10-9)
+expect_equal(CoxRegListParallelbetaFrailtypenal$Frailty-CoxRegListParallelbetaFrailtypenal$ModelSummary[8],
+             coxfrailpenal$frail,tolerance = 10-9)

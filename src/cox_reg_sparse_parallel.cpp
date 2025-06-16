@@ -255,8 +255,8 @@ void cox_reg_sparse_parallel(List modeldata,
 
 #pragma omp parallel default(none) shared(wt_average, timeout,  weights,  Outcomes ,ntimes, maxobs)
 {  
-        std::vector<double> wt_average_private(ntimes);
-        wt_average_private = {0};
+    std::vector<double> wt_average_private(ntimes);
+    wt_average_private = {0};
 #pragma omp for
     for (int rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
     {
@@ -274,193 +274,191 @@ void cox_reg_sparse_parallel(List modeldata,
   
   for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
+/* Set up */
+newlk = 0.0;
+if (lambda !=0) newlk = -(log(sqrt(lambda)) * nvar);
+
+
+loglik = 0.0;
+frailty_penalty = 0.0;
+d2_sum_private = 0.0;
+for (int ivar = 0; ivar < nallvar; ivar++) step[ivar] = 1.0; 
+
+for (int ir = 0 ; ir < ntimes; ir++)
+{
+  denom[ir] = 0.0;
+  efron_wt[ir] = 0.0;
+}
+
+for (int ir = 0; ir < maxobs; ir++) zbeta[ir] = 0.0;
+for (int it = 0; it < ntimes*4; it++) derivMatrix[it] = 0.0;
+//  for (int ivar = 0; ivar < maxid; ivar++) frailty[ivar] = 0.0;
+//  for (int ivar = 0; ivar < nvar; ivar++  ) beta[ivar] = 0.0;
+
+for (int i = 0; i < nvar; i++) // 
+{ /* per observation time calculations */
+
+double beta_local =  beta[i] ;
+  
+#pragma omp parallel  default(none) shared(i, covstart, covend, covn, maxobs, coval, beta_local,  obs, zbeta) //reduction(+:zbeta[:maxobs])
+{
+  std::vector<double> zbeta_private(maxobs);
+  zbeta_private = {0.0};
+  
+#pragma omp for
+  for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
+  {
+    int row = covn[covi] - 1; // R_xlen_t is signed long, size_t is unsigned. R vectors use signed so all numbers should be below 2,147,483,647
+    int rowobs =  obs[row] - 1 ;
+    double covali =  coval[row] ;
+    zbeta_private[rowobs] += beta_local * covali ;
+  }
+  
+  for (int rowobs = 0; rowobs < maxobs ; rowobs++)
+  {
+#pragma omp atomic
+    zbeta[rowobs] += zbeta_private[rowobs];
+  }
+
+}
+}
+if (recurrent == 1)
+{
+#pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty) //reduction(+:zbeta[:maxobs])
+  for (int i = 0; i < maxid; i++) // +
+  { /* per observation time calculations */
+
+    for (int idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
+    {
+#pragma omp atomic
+      zbeta[idn[idi] - 1] += frailty[i] ; // should be one frailty per person / observation
+    }
+  }
+}
+
+/* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
+newlk_private = 0.0;
+#pragma omp parallel  default(none) reduction(+:newlk_private)  shared(efron_wt,denom,timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
+{
+  std::vector<double> denom_private(ntimes);
+  std::vector<double> efron_wt_private(ntimes);
+  denom_private = {0};
+  efron_wt_private = {0};
+  
+#pragma omp for
+  for (int rowobs = 0; rowobs < maxobs; rowobs++)
+  {
+    int time_index_entry = timein[rowobs] - 1;  // Time starts at zero but no events at this time to calculate sums. Lowest value of -1 but not used to reference into any vectors
+    int time_index_exit = timeout[rowobs] - 1;
+    
+    double zbeta_temp = zbeta[(rowobs)] >22 ? 22 : zbeta[(rowobs)];
+    zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
+    double risk = exp(zbeta_temp ) * weights[rowobs];
+    
+    //cumumlative sums for all patients
+    for (int r = time_index_exit; r > time_index_entry ; r--)
+      denom_private[(r)] += risk;
+    
+    if (Outcomes[rowobs] > 0 )
+    {
+      /*cumumlative sums for event patients */
+      newlk_private += (zbeta_temp) * weights[rowobs];
+      efron_wt_private[(time_index_exit)] += risk;
+      
+    }
+#pragma omp atomic write
+    zbeta[(rowobs)] = zbeta_temp; // should be threadsafe without atomic as threads by rowobs
+  }  
+  for (int r = 0; r < ntimes ; r++)
+  {
+#pragma omp atomic
+    efron_wt[(r)] += efron_wt_private[(r)];
+#pragma omp atomic
+    denom[(r)] += denom_private[(r)];
+  }
+}
+
+newlk += newlk_private;
+
+/* Main outer loop for theta and covariate updates */
   int outer_iter = 0;
   for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++) 
   {
-    newlk = 0.0;
-    if (lambda !=0) newlk = -(log(sqrt(lambda)) * nvar);
-  
-    loglik = 0.0;
-    frailty_penalty = 0.0;
-    d2_sum_private = 0.0;
-    for (int ivar = 0; ivar < nallvar; ivar++) step[ivar] = 1.0; 
-
-    for (int ir = 0 ; ir < ntimes; ir++)
-    {
-      denom[ir] = 0.0;
-      efron_wt[ir] = 0.0;
-    }
-    
-    for (int ir = 0; ir < maxobs; ir++) zbeta[ir] = 0.0;
-    for (int it = 0; it < ntimes*4; it++) derivMatrix[it] = 0.0;
-  //  for (int ivar = 0; ivar < maxid; ivar++) frailty[ivar] = 0.0;
-  //  for (int ivar = 0; ivar < nvar; ivar++  ) beta[ivar] = 0.0;
-    
-    for (int i = 0; i < nvar; i++) // 
-    { /* per observation time calculations */
-
-      double beta_local =  beta[i] ;
-      
-#pragma omp parallel  default(none) shared(i, covstart, covend, covn, maxobs, coval, beta_local,  obs, zbeta) //reduction(+:zbeta[:maxobs])
-{
-      std::vector<double> zbeta_private(maxobs);
-      zbeta_private = {0.0};
-    
-#pragma omp for
-    for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
-    {
-      int row = covn[covi] - 1; // R_xlen_t is signed long, size_t is unsigned. R vectors use signed so all numbers should be below 2,147,483,647
-      int rowobs =  obs[row] - 1 ;
-      double covali =  coval[row] ;
-      zbeta_private[rowobs] += beta_local * covali ;
-    }
-    
-    for (int rowobs = 0; rowobs < maxobs ; rowobs++)
-    {
-#pragma omp atomic
-      zbeta[rowobs] += zbeta_private[rowobs];
-    }
-
-}
-    }
-    if (recurrent == 1)
-    {
-#pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty) //reduction(+:zbeta[:maxobs])
-      for (int i = 0; i < maxid; i++) // +
-      { /* per observation time calculations */
-
-        for (int idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
-        {
-#pragma omp atomic
-          zbeta[idn[idi] - 1] += frailty[i] ; // should be one frailty per person / observation
-        }
-      }
-    }
-
-/* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
-    newlk_private = 0.0;
-#pragma omp parallel  default(none) reduction(+:newlk_private)  shared(efron_wt,denom,timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
-{
-          std::vector<double> denom_private(ntimes);
-          std::vector<double> efron_wt_private(ntimes);
-          denom_private = {0};
-          efron_wt_private = {0};
-    
-#pragma omp for
-    for (int rowobs = 0; rowobs < maxobs; rowobs++)
-    {
-      int time_index_entry = timein[rowobs] - 1;  // Time starts at zero but no events at this time to calculate sums. Lowest value of -1 but not used to reference into any vectors
-      int time_index_exit = timeout[rowobs] - 1;
-  
-      double zbeta_temp = zbeta[(rowobs)] >22 ? 22 : zbeta[(rowobs)];
-      zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
-      double risk = exp(zbeta_temp ) * weights[rowobs];
-  
-      //cumumlative sums for all patients
-      for (int r = time_index_exit; r > time_index_entry ; r--)
-        denom_private[(r)] += risk;
-  
-      if (Outcomes[rowobs] > 0 )
-      {
-        /*cumumlative sums for event patients */
-        newlk_private += (zbeta_temp) * weights[rowobs];
-        efron_wt_private[(time_index_exit)] += risk;
-  
-      }
-#pragma omp atomic write
-        zbeta[(rowobs)] = zbeta_temp; // should be threadsafe without atomic as threads by rowobs
-    }  
-    for (int r = 0; r < ntimes ; r++)
-    {
-#pragma omp atomic
-      efron_wt[(r)] += efron_wt_private[(r)];
-#pragma omp atomic
-      denom[(r)] += denom_private[(r)];
-    }
-
-}
-    newlk += newlk_private;
-    
-/* Vectors for holding intermediate values in inference loop */
-
     int iter = 0;
     for (iter = 0; iter <= MSTEP_MAX_ITER; iter++)
     {
-      for (int i = 0; i < nvar; i++)
-      { 
-  
-        double gdiag =  -gdiagvar[i];
-        double hdiag = 0.0;
-        
-        for (int ir = 0; ir < (ntimes*4); ir++) derivMatrix[ir] = 0.0;
-    
-#pragma omp parallel default(none) shared( derivMatrix, covstart, covend, covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, zbeta,i, nvar)
-{
-        std::vector<double> derivMatrix_private(ntimes*4);
-        derivMatrix_private = {0};
-       // for (int ir = 0; ir < (ntimes*4); ir++) derivMatrix_private[ir] = 0.0;
-        
-#pragma omp for
-        for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
-        {
-          int row = covn[covi] - 1; // R_xlen_t is signed long, size_t is unsigned. R vectors use signed
-          int rowobs = (obs[row] - 1) ;
-
-          int time_index_entry = timein[rowobs] - 1; // std vectors use unsigned can be negative though for time 0
-          int time_index_exit = timeout[rowobs] - 1; // std vectors use unsigned
-      
-          double risk = exp(zbeta[(rowobs)]) * weights[rowobs];
-          double covali = coval[row] ;
-          double derivFirst = risk * covali;
-          double derivSecond = derivFirst * covali;
-          for (int r = time_index_exit ; r >time_index_entry ; r--) // keep int for calculations of indices then cast
-          {
-            derivMatrix_private[(r)] += derivFirst;
-            derivMatrix_private[(ntimes + r)] += derivSecond;
-          }
-          if (Outcomes[rowobs] > 0)
-          {
-         
-            derivMatrix_private[((2*ntimes) + time_index_exit)] += derivFirst ;
-            derivMatrix_private[((3*ntimes) + time_index_exit)] += derivSecond ;
-         
-          }
-        }
-      
-        for (int r = 0; r < (ntimes*4); r++)
-        {
-#pragma omp atomic
-          derivMatrix[(r)] += derivMatrix_private[(r)];
-        }
-
-}
-    
-        int exittimesN = OutcomeTotalTimes.size() -1;
-    
-        for(int r = exittimesN ; r >=0 ; r--)
-        {
-      
-          int  time = OutcomeTotalTimes[r] - 1;
-  
-          for (int k = 0; k < OutcomeTotals[r]; k++)
-          {
-            double temp = (double)k
-            / (double)OutcomeTotals[r];
-            double d2 = denom[time] - (temp * efron_wt[time]); /* sum(denom) adjusted for tied deaths*/
-
-            double temp2 = (derivMatrix[(time)] - (temp * derivMatrix[((2*ntimes) + time)])) / d2;
-            gdiag += wt_average[time]*temp2; 
-            hdiag += wt_average[time]*(((derivMatrix[(ntimes + time)] - (temp * derivMatrix[((3*ntimes) + time)])) / d2) -
-                      (temp2 * temp2)) ;
-          }
-        } 
-      
-        double dif = 0; 
-    
-    /* Update */
-    
-        if (i < nvar) 
+    //  if (iter != 0 || outer_iter == 0)  // Don't update beta coefficients on first iteration if only change is theta/nu for gamma penalty
+      {
+        for (int i = 0; i < nvar; i++)
         { 
+    
+          double gdiag =  -gdiagvar[i];
+          double hdiag = 0.0;
+          
+          for (int ir = 0; ir < (ntimes*4); ir++) derivMatrix[ir] = 0.0;
+      
+  #pragma omp parallel default(none) shared( derivMatrix, covstart, covend, covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, zbeta,i, nvar)
+  {
+          std::vector<double> derivMatrix_private(ntimes*4);
+          derivMatrix_private = {0.0};
+          
+  #pragma omp for
+          for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
+          {
+            int row = covn[covi] - 1; // R_xlen_t is signed long, size_t is unsigned. R vectors use signed
+            int rowobs = (obs[row] - 1) ;
+  
+            int time_index_entry = timein[rowobs] - 1; // std vectors use unsigned can be negative though for time 0
+            int time_index_exit = timeout[rowobs] - 1; // std vectors use unsigned
+        
+            double risk = exp(zbeta[(rowobs)]) * weights[rowobs];
+            double covali = coval[row] ;
+            double derivFirst = risk * covali;
+            double derivSecond = derivFirst * covali;
+            for (int r = time_index_exit ; r >time_index_entry ; r--) // keep int for calculations of indices then cast
+            {
+              derivMatrix_private[(r)] += derivFirst;
+              derivMatrix_private[(ntimes + r)] += derivSecond;
+            }
+            if (Outcomes[rowobs] > 0)
+            {
+           
+              derivMatrix_private[((2*ntimes) + time_index_exit)] += derivFirst ;
+              derivMatrix_private[((3*ntimes) + time_index_exit)] += derivSecond ;
+           
+            }
+          }
+        
+          for (int r = 0; r < (ntimes*4); r++)
+          {
+  #pragma omp atomic
+            derivMatrix[(r)] += derivMatrix_private[(r)];
+          }
+  }
+      
+          int exittimesN = OutcomeTotalTimes.size() -1;
+      
+          for(int r = exittimesN ; r >=0 ; r--)
+          {
+            int  time = OutcomeTotalTimes[r] - 1;
+    
+            for (int k = 0; k < OutcomeTotals[r]; k++)
+            {
+              double temp = (double)k
+              / (double)OutcomeTotals[r];
+              double d2 = denom[time] - (temp * efron_wt[time]); /* sum(denom) adjusted for tied deaths*/
+  
+              double temp2 = (derivMatrix[(time)] - (temp * derivMatrix[((2*ntimes) + time)])) / d2;
+              gdiag += wt_average[time]*temp2; 
+              hdiag += wt_average[time]*(((derivMatrix[(ntimes + time)] - (temp * derivMatrix[((3*ntimes) + time)])) / d2) -
+                        (temp2 * temp2)) ;
+            }
+          } 
+        
+          double dif = 0; 
+      
+      /* Update */
+      
           if (lambda !=0) {
             dif = (gdiag + (beta[i] / lambda)) / (hdiag + (1.0 / lambda));
           } else {
@@ -480,10 +478,7 @@ void cox_reg_sparse_parallel(List modeldata,
           if (lambda !=0) {
             newlk -= (beta[i] * beta[i]) / (2.0 * lambda);// Include iteration penalty for this covariate
           }
-        
-
-        
-        } 
+         
 
       /* Update cumulative sums dependent on denominator and zbeta so need to accumulate updates then apply them*/
         newlk_private = 0.0;
@@ -495,12 +490,6 @@ void cox_reg_sparse_parallel(List modeldata,
           efron_wt_private = {0};
     
 
-        for (int ir = 0 ; ir < ntimes; ir++)
-        {
-          denom_private[ir] = 0.0;
-          efron_wt_private[ir] = 0.0;
-        }
-        
 #pragma omp for
         for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
         {
@@ -509,42 +498,43 @@ void cox_reg_sparse_parallel(List modeldata,
 
           double riskold = exp(zbeta[rowobs] ); 
           double covali =  coval[row] ;
+
           double xbdif = dif * covali ; // don't update zbeta when only patient level frailty terms updated!
           
           double zbeta_updated = zbeta[(rowobs)] - xbdif;
           zbeta_updated =  zbeta_updated >22 ? 22 : zbeta_updated;
           zbeta_updated =  zbeta_updated < -200 ? -200 :  zbeta_updated;
-        
+          
 #pragma omp atomic write
           zbeta[(rowobs)] = zbeta_updated; // Each covariate only once per patient per time so can update directly
-    
-          double riskdiff = (exp(zbeta_updated ) - riskold) * weights[rowobs]; 
-          
-          int time_index_entry =  timein[rowobs] - 1;
-          int time_index_exit =  timeout[rowobs] - 1;
-          
-          for (int r = time_index_exit; r > time_index_entry ; r--)
-            denom_private[(r)] += riskdiff; 
-          
-          if (Outcomes[rowobs] > 0 )
-          {
-            newlk_private += xbdif * weights[rowobs];
-            efron_wt_private[(time_index_exit)] += riskdiff;
-          }
-        }
-        for (int r = ntimes - 1; r >= 0; r--)
-        {
-#pragma omp atomic
-          efron_wt[(r)] += efron_wt_private[(r)];
-#pragma omp atomic
-          denom[(r)] += denom_private[(r)];
-        }
 
-}
-    
-        newlk -= newlk_private; // min  beta updated = beta - diff
-      } /* end of coefficient updates for beta */
+            double riskdiff = (exp(zbeta_updated ) - riskold) * weights[rowobs]; 
+            
+            int time_index_entry =  timein[rowobs] - 1;
+            int time_index_exit =  timeout[rowobs] - 1;
+            
+            for (int r = time_index_exit; r > time_index_entry ; r--)
+              denom_private[(r)] += riskdiff; 
+            
+            if (Outcomes[rowobs] > 0 )
+            {
+              newlk_private += xbdif * weights[rowobs];
+              efron_wt_private[(time_index_exit)] += riskdiff;
+            }
+          }
+          for (int r = ntimes - 1; r >= 0; r--)
+          {
+  #pragma omp atomic
+            efron_wt[(r)] += efron_wt_private[(r)];
+  #pragma omp atomic
+            denom[(r)] += denom_private[(r)];
+          }
+
+  }
       
+          newlk -= newlk_private; // min  beta updated = beta - diff
+        } /* end of coefficient updates for beta */
+      }
       if (recurrent == 1)
       {
         newlk_private = 0.0;
@@ -934,8 +924,7 @@ void cox_reg_sparse_parallel(List modeldata,
       iter_theta++;
       
       nu = 1 / theta;
-        
-  
+
     } 
     if (recurrent == 0) done = 1;
      /* end of theta loop */
