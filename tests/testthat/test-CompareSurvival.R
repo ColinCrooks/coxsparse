@@ -429,7 +429,7 @@ coxfrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex + frailty(id, tra
 
 setThreadOptions(numThreads = 32)
 set.seed(235739801)
-lambda =0
+lambda =0.1
 CoxRegListParallelbetaFrailty <- list()
 
 CoxRegListParallelbetaFrailty[['Beta']] <- vector('double',length(covstart))

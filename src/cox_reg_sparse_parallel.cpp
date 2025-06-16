@@ -255,9 +255,8 @@ void cox_reg_sparse_parallel(List modeldata,
 
 #pragma omp parallel default(none) shared(wt_average, timeout,  weights,  Outcomes ,ntimes, maxobs)
 {  
-    double * wt_average_private = new double [ntimes];
-    for (int ir = 0 ; ir < ntimes; ir++)    wt_average_private[ir] = 0.0;
-
+        std::vector<double> wt_average_private(ntimes);
+        wt_average_private = {0};
 #pragma omp for
     for (int rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
     {
@@ -271,7 +270,6 @@ void cox_reg_sparse_parallel(List modeldata,
       wt_average[r] += wt_average_private[r];
     }
     
-    delete[] wt_average_private;
 }
   
   for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
@@ -305,8 +303,8 @@ void cox_reg_sparse_parallel(List modeldata,
       
 #pragma omp parallel  default(none) shared(i, covstart, covend, covn, maxobs, coval, beta_local,  obs, zbeta) //reduction(+:zbeta[:maxobs])
 {
-      double* zbeta_private = new double [maxobs];
-      for (int ir = 0; ir < maxobs; ir++) zbeta_private[ir] = 0.0;
+      std::vector<double> zbeta_private(maxobs);
+      zbeta_private = {0.0};
     
 #pragma omp for
     for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
@@ -322,7 +320,7 @@ void cox_reg_sparse_parallel(List modeldata,
 #pragma omp atomic
       zbeta[rowobs] += zbeta_private[rowobs];
     }
-    delete[] zbeta_private;
+
 }
     }
     if (recurrent == 1)
@@ -343,13 +341,10 @@ void cox_reg_sparse_parallel(List modeldata,
     newlk_private = 0.0;
 #pragma omp parallel  default(none) reduction(+:newlk_private)  shared(efron_wt,denom,timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
 {
-    double * denom_private  = new double [ntimes];
-    double * efron_wt_private  = new double [ntimes];
-    for (int ir = 0 ; ir < ntimes; ir++)
-    {
-      denom_private[ir] = 0.0;
-      efron_wt_private[ir] = 0.0;
-    }
+          std::vector<double> denom_private(ntimes);
+          std::vector<double> efron_wt_private(ntimes);
+          denom_private = {0};
+          efron_wt_private = {0};
     
 #pragma omp for
     for (int rowobs = 0; rowobs < maxobs; rowobs++)
@@ -382,8 +377,7 @@ void cox_reg_sparse_parallel(List modeldata,
 #pragma omp atomic
       denom[(r)] += denom_private[(r)];
     }
-    delete[] efron_wt_private;
-    delete[] denom_private;
+
 }
     newlk += newlk_private;
     
@@ -402,8 +396,9 @@ void cox_reg_sparse_parallel(List modeldata,
     
 #pragma omp parallel default(none) shared( derivMatrix, covstart, covend, covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, zbeta,i, nvar)
 {
-        double * derivMatrix_private= new double [ntimes*4];
-        for (int ir = 0; ir < (ntimes*4); ir++) derivMatrix_private[ir] = 0.0;
+        std::vector<double> derivMatrix_private(ntimes*4);
+        derivMatrix_private = {0};
+       // for (int ir = 0; ir < (ntimes*4); ir++) derivMatrix_private[ir] = 0.0;
         
 #pragma omp for
         for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
@@ -437,8 +432,7 @@ void cox_reg_sparse_parallel(List modeldata,
 #pragma omp atomic
           derivMatrix[(r)] += derivMatrix_private[(r)];
         }
-        
-        delete[] derivMatrix_private;
+
 }
     
         int exittimesN = OutcomeTotalTimes.size() -1;
@@ -495,9 +489,12 @@ void cox_reg_sparse_parallel(List modeldata,
         newlk_private = 0.0;
 #pragma omp parallel  default(none) reduction(+:newlk_private)  shared(denom,efron_wt,zbeta,covstart, covend,covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
 {
-        double *denom_private = new double [ntimes];
-        double *efron_wt_private= new double [ntimes];
-        
+          std::vector<double> denom_private(ntimes);
+          std::vector<double> efron_wt_private(ntimes);
+          denom_private = {0};
+          efron_wt_private = {0};
+    
+
         for (int ir = 0 ; ir < ntimes; ir++)
         {
           denom_private[ir] = 0.0;
@@ -542,8 +539,7 @@ void cox_reg_sparse_parallel(List modeldata,
 #pragma omp atomic
           denom[(r)] += denom_private[(r)];
         }
-        delete[] efron_wt_private;
-        delete[] denom_private;
+
 }
     
         newlk -= newlk_private; // min  beta updated = beta - diff
@@ -558,9 +554,8 @@ void cox_reg_sparse_parallel(List modeldata,
           double gdiag =  -gdiagvar[i + nvar];
           double hdiag = 0.0;
 
-          double * derivMatrix_private= new double [ntimes*2];
-          for (int ir = 0; ir < (ntimes*2); ir++) derivMatrix_private[ir] = 0.0;
-
+        std::vector<double> derivMatrix_private(ntimes*2);
+        derivMatrix_private = {0};
 
           for (int idi = idstart[i] - 1; idi < idend[i] ; idi++)
           { // iter over current covariates
@@ -597,7 +592,6 @@ void cox_reg_sparse_parallel(List modeldata,
             }
           } 
      
-          delete[] derivMatrix_private;
           double dif = 0;
 
  /* Update */
@@ -626,14 +620,15 @@ void cox_reg_sparse_parallel(List modeldata,
 
 /* Update cumulative sums dependent on denominator and zbeta so need to accumulate updates then apply them*/
 
-          double *denom_private = new double [ntimes];
-          double *efron_wt_private= new double [ntimes];
-
-          for (int ir = 0 ; ir < ntimes; ir++)
-          {
-            denom_private[ir] = 0.0;
-            efron_wt_private[ir] = 0.0;
-          }
+          std::vector<double> denom_private(ntimes);
+          std::vector<double> efron_wt_private(ntimes);
+          denom_private = {0};
+          efron_wt_private = {0};
+          // for (int ir = 0 ; ir < ntimes; ir++)
+          // {
+          //   denom_private[ir] = 0.0;
+          //   efron_wt_private[ir] = 0.0;
+          // }
           for (int idi = idstart[i] - 1; idi < idend[i] ; idi++)
           {
             int rowobs = (idn[idi] - 1); // R_xlen_t is signed long, size_t is unsigned. R vectors use signed so use int throughout
@@ -668,8 +663,7 @@ void cox_reg_sparse_parallel(List modeldata,
 #pragma omp atomic
             denom[(r)] += denom_private[(r)];
           }
-          delete[] efron_wt_private;
-          delete[] denom_private;
+
 
         } /* next frailty term */
         newlk -= newlk_private;
