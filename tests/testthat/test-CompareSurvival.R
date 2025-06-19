@@ -120,7 +120,7 @@ weights <- runif(length(Outcomes))
 
 
 Sys.time()
-coxunreg <- survival::coxph(Surv(start, stop, event) ~ age + year + surgery + transplant ,weights = weights, data = heart.dt)
+system.time(coxunreg <- survival::coxph(Surv(start, stop, event) ~ age + year + surgery + transplant ,weights = weights, data = heart.dt))
 coxunreg_bh <- survival::basehaz(coxunreg, centered = F)
 Sys.time() #20s
 coef(coxunreg)
@@ -144,7 +144,7 @@ CoxRegListParallelbeta[['Risk']] <- vector('double',max(obs))
 CoxRegListParallelbeta[['ModelSummary']] <- vector('double',8)
 
 Sys.time()
-cox_reg_sparse_parallel(modeldata = CoxRegListParallelbeta,#beta_in = CoxRegListParallelbeta[['Beta']] ,
+system.time( cox_reg_sparse_parallel(modeldata = CoxRegListParallelbeta,#beta_in = CoxRegListParallelbeta[['Beta']] ,
                                                                     #frailty_in = CoxRegListParallelbeta[['Frailty']],
                                                                     #basehaz_in  = CoxRegListParallelbeta[['basehaz']],
                                                                     #cumhaz_in = CoxRegListParallelbeta[['cumhaz']] ,
@@ -170,7 +170,7 @@ cox_reg_sparse_parallel(modeldata = CoxRegListParallelbeta,#beta_in = CoxRegList
                                                     theta_in = 0,
                                                     MSTEP_MAX_ITER = 100,
                                                     MAX_EPS = 1e-10,
-                                                    threadn = 32)
+                                                    threadn = 32))
 Sys.time() # 17 s
 
 names(CoxRegListParallelbeta$Beta) <- c('age', 'year', 'surgery', 'transplant')
@@ -555,7 +555,10 @@ expect_equal(c(confint(coxfrail,type='profile')),c(profileCI), tolerance = 0.2)
 ###################################################################################
 
 lambda =0.1
-coxfrailpenal <- survival::coxph(Surv(start, stop, event) ~ ridge(rx,sex, theta = 1/lambda, scale = F) + frailty(id, trace =T) ,weights = rep(1,length(weights)),  data = rats.dt,model = T)
+system.time(coxfrailpenal <- survival::coxph(Surv(start, stop, event) ~ ridge(rx,sex, theta = 1/lambda, scale = F) + frailty(id, trace =T) ,weights = rep(1,length(weights)),  data = rats.dt,model = T))
+
+# user  system elapsed 
+# 0.03    0.00    0.03 
 
 # rats.dt[, cumhz := data.table::setDT(basehaz(coxfrail,centered = F))[rats.dt[,.(stop)], , on = c('time' = 'stop')]$hazard]
 # rats.dt[,wt := ((sum(event))/(sum(cumhz))), by = id]
@@ -588,7 +591,12 @@ Sys.time()
 history <- list()
 # i <- 1
 # while( done == 0) {
-cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailtypenal,
+
+# using vector, parallel for and private vectors to reduce
+# user  system elapsed 
+# 0.81    0.15    0.23 
+
+system.time(cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailtypenal,
                         #beta_in = CoxRegListParallelbetaFrailty[['Beta']] ,
                         #frailty_in = CoxRegListParallelbetaFrailty[['Frailty']],
                         #basehaz_in  = CoxRegListParallelbetaFrailty[['basehaz']],
@@ -615,7 +623,7 @@ cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailtypenal,
                         theta_in = 0,
                         MSTEP_MAX_ITER = 20,
                         MAX_EPS = 1e-9,
-                        threadn = 32)
+                        threadn = 32))
 
 
 rbind(coef(coxnofrail),
