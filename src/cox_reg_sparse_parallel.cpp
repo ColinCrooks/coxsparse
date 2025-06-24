@@ -94,7 +94,7 @@ using namespace Rcpp;
  //' @return Void: see the model data input list for the output.
  //' @export
  // [[Rcpp::export]]
- void cox_reg_sparse_parallel(List modeldata,   
+ Rcpp::List cox_reg_sparse_parallel(  
                               IntegerVector obs_in,
                               DoubleVector  coval_in,
                               DoubleVector  weights_in,
@@ -159,33 +159,29 @@ using namespace Rcpp;
    std::vector<double> step(nallvar);
    std::vector<double> gdiagbeta(nvar);
    std::vector<double> gdiagfrail(maxid);
-   std::vector<double> frailty(maxid);
+   Rcpp::DoubleVector frailty_r(maxid);
+   Rcpp::DoubleVector beta_r(nvar);
+   Rcpp::DoubleVector basehaz_r(ntimes);
+   Rcpp::DoubleVector cumhaz_r(ntimes);
+   Rcpp::DoubleVector ModelSummary_r(8);
 
    Rcout << "setting to zero, ";
    theta_history = {0.0};
    thetalkl_history = {-std::numeric_limits<double>::infinity()};
-   denom = {0.0};
-   efron_wt = {0.0};
-   wt_average = {0.0};
-   zbeta = {0.0};
-   derivMatrix = {0.0};
-   gdiagfrail = {0.0};
-   gdiagbeta = {0.0};
-   step = {1.0};
-   frailty = {0.0};
+   for (int i = 0; i < nallvar; i++) step[i] = 1.0;
 
    /* Wrap all R objects to make thread safe for read and writing  */
    
    Rcout << "pointing to R vectors in list, ";
-   Rcpp::DoubleVector beta_in = modeldata["Beta"];
-   Rcpp::DoubleVector frailty_in = modeldata["Frailty"];
-   Rcpp::DoubleVector basehaz_in = modeldata["basehaz"];
-   Rcpp::DoubleVector cumhaz_in = modeldata["cumhaz"];
+   //Rcpp::DoubleVector beta_in = modeldata["Beta"];
+   //Rcpp::DoubleVector frailty_in = modeldata["Frailty"];
+   //Rcpp::DoubleVector basehaz_in = modeldata["basehaz"];
+   //Rcpp::DoubleVector cumhaz_in = modeldata["cumhaz"];
    //DoubleVector BaseHazardEntry_in = modeldata["BaseHazardEntry"];
    //DoubleVector cumhazEntry_in = modeldata["cumhazEntry"];
    //DoubleVector cumhaz1year_in = modeldata["cumhaz1year"];
    //DoubleVector Risk_in = modeldata["Risk"];    */
-   Rcpp::DoubleVector ModelSummary_in =modeldata["ModelSummary"];
+   //Rcpp::DoubleVector ModelSummary_in =modeldata["ModelSummary"];
 
    Rcout << "wrapping R vectors, ";
    RcppParallel::RVector<double> coval(coval_in);
@@ -213,11 +209,11 @@ using namespace Rcpp;
   // Rcpp::DoubleVector basehaz(ntimes);
   // Rcpp::DoubleVector cumhaz(ntimes);
   // Rcpp::DoubleVector beta(nvar);
-   RcppParallel::RVector<double> basehaz(basehaz_in);
-   RcppParallel::RVector<double> cumhaz(cumhaz_in);
-   RcppParallel::RVector<double> beta(beta_in);
-   RcppParallel::RVector<double> frailty_return(frailty_in);
-   RcppParallel::RVector<double> ModelSummary(ModelSummary_in);
+   RcppParallel::RVector<double> basehaz(basehaz_r);
+   RcppParallel::RVector<double> cumhaz(cumhaz_r);
+   RcppParallel::RVector<double> beta(beta_r);
+   RcppParallel::RVector<double> frailty(frailty_r);
+   RcppParallel::RVector<double> ModelSummary(ModelSummary_r);
 
    int iter_theta = 0;
    double inner_EPS = 1e-5;
@@ -1055,7 +1051,7 @@ for (int rowobs = 0; rowobs < maxobs ; rowobs++)
 Rcout << " done" <<std::endl;
  */
 
-for (int i = 0; i < maxid; i++) frailty_return[i] = frailty[i];
+//for (int i = 0; i < maxid; i++) frailty_return[i] = frailty[i];
 
 ModelSummary[0] = loglik;
 ModelSummary[1] = lik_correction;
@@ -1071,7 +1067,12 @@ for(int i = 0; i < 8; i++) Rcout << ModelSummary[i] << ", ";
 
 Rcout <<  std::endl;
 
-
+Rcpp::List returnList = List::create(Named("Beta") = beta_r ,
+                                  _["Frailty"] = frailty_r, 
+                                    _["basehaz"] = basehaz_r,
+                                  _["cumhaz"] = cumhaz_r,
+                                  _["ModelSummary"] = ModelSummary_r);
+return(returnList);
  }
  
  
