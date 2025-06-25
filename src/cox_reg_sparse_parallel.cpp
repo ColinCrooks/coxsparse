@@ -146,29 +146,26 @@ using namespace Rcpp;
    double frailty_penalty = 0.0;
    
    Rcout << "Allocating vectors, ";
-   std::vector<int> frailty_group_events(maxid); // Count of events for each patient (for gamma penalty weight)
-   frailty_group_events = {0};
-   
-   std::vector<double> theta_history(MSTEP_MAX_ITER);
-   std::vector<double> thetalkl_history(MSTEP_MAX_ITER);
-   std::vector<double> denom(ntimes);      // sum of risk of all patients at each time point
-   std::vector<double> efron_wt(ntimes);  // Sum of risk of patients with events at each time point
-   std::vector<double> wt_average(ntimes);  // Average weight of people with event at each time point.
-   std::vector<double> zbeta(maxobs);
-   std::vector<double> derivMatrix(ntimes*4);
-   std::vector<double> step(nallvar);
-   std::vector<double> gdiagbeta(nvar);
-   std::vector<double> gdiagfrail(maxid);
-   Rcpp::DoubleVector frailty_r(maxid);
-   Rcpp::DoubleVector beta_r(nvar);
-   Rcpp::DoubleVector basehaz_r(ntimes);
-   Rcpp::DoubleVector cumhaz_r(ntimes);
+   std::vector<int> frailty_group_events(maxid,0); // Count of events for each patient (for gamma penalty weight)   
+   std::vector<double> theta_history(MSTEP_MAX_ITER,0.0);
+   std::vector<double> thetalkl_history(MSTEP_MAX_ITER,-std::numeric_limits<double>::infinity());
+  // std::vector<double> denom(ntimes,0.0);      // sum of risk of all patients at each time point
+  // std::vector<double> efron_wt(ntimes,0.0);  // Sum of risk of patients with events at each time point
+   double denom[ntimes] = 0.0;
+  double efron_wt[ntimes] = 0.0;
+   std::vector<double> wt_average(ntimes,0.0);  // Average weight of people with event at each time point.
+   std::vector<double> zbeta(maxobs,0.0);
+   std::vector<double> derivMatrix(ntimes*4,0.0);
+   std::vector<double> step(nallvar,1.0);
+   std::vector<double> gdiagbeta(nvar,0.0);
+   std::vector<double> gdiagfrail(maxid,0.0);
+   Rcpp::DoubleVector frailty_r(maxid,0.0);
+   Rcpp::DoubleVector beta_r(nvar,0.0);
+   Rcpp::DoubleVector basehaz_r(ntimes,0.0);
+   Rcpp::DoubleVector cumhaz_r(ntimes,0.0);
    Rcpp::DoubleVector ModelSummary_r(8);
 
    Rcout << "setting to zero, ";
-   theta_history = {0.0};
-   thetalkl_history = {-std::numeric_limits<double>::infinity()};
-   for (int i = 0; i < nallvar; i++) step[i] = 1.0;
 
    /* Wrap all R objects to make thread safe for read and writing  */
    
@@ -357,9 +354,9 @@ for (int idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current cova
 Rcout << "accumulating denominator, ";
 /* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
 newlk_private = 0.0;
-double* denom_data = denom.data();
-double* efron_wt_data = efron_wt.data();
-#pragma omp parallel  default(none) reduction(+:newlk_private, denom_data[:ntimes], efron_wt_data[:ntimes])  shared(efron_wt,denom,timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
+//double* denom_data = denom.data();
+//double* efron_wt_data = efron_wt.data();
+#pragma omp parallel  default(none) reduction(+:newlk_private, denom[:ntimes], efron_wt[:ntimes])  shared(timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
 {
   // std::vector<double> denom_private(ntimes);
   // std::vector<double> efron_wt_private(ntimes);
@@ -378,13 +375,13 @@ double* efron_wt_data = efron_wt.data();
     zbeta[(rowobs)] = zbeta_temp;
     //cumumlative sums for all patients
     for (int r = time_index_exit; r > time_index_entry ; r--)
-      denom_data[(r)] += risk;
+      denom[(r)] += risk;
     
     if (Outcomes[rowobs] > 0 )
     {
       /*cumumlative sums for event patients */
       newlk_private += (zbeta_temp) * weights[rowobs];
-      efron_wt_data[(time_index_exit)] += risk;
+      efron_wt[(time_index_exit)] += risk;
       
     }
 // #pragma omp atomic write
@@ -505,16 +502,16 @@ Rcout << "updating zbeta and denominator, ";
 
 /* Update cumulative sums dependent on denominator and zbeta so need to accumulate updates then apply them*/
 newlk_private = 0.0;
-std::vector<double> denom_private(ntimes);
-std::vector<double> efron_wt_private(ntimes);
+//std::vector<double> denom_private(ntimes);
+//std::vector<double> efron_wt_private(ntimes);
 //std::vector<double> zbeta_private(maxobs);
 //denom_private = {0};
 //efron_wt_private = {0};
-double* denom_private_data = denom_private.data();
-double* efron_wt_private_data = efron_wt_private.data();
+double denom_private_data[ntimes] = 0.0;
+double efron_wt_private_data[ntimes] = 0.0;
 // zbeta_private = {0.0};
 // double* zbeta_private_data = zbeta_private.data();
-#pragma omp parallel  default(none) reduction(+:newlk_private, denom_private_data[:ntimes], efron_wt_private_data[:ntimes])  shared(denom,efron_wt,zbeta,covstart, covend,covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
+#pragma omp parallel  default(none) reduction(+:newlk_private, denom_private[:ntimes], efron_wt_private[:ntimes])  shared(denom,efron_wt,zbeta,covstart, covend,covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
 {
 #pragma omp for
   for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
@@ -540,12 +537,12 @@ double* efron_wt_private_data = efron_wt_private.data();
     int time_index_exit =  timeout[rowobs] - 1;
     
     for (int r = time_index_exit; r > time_index_entry ; r--)
-      denom_private_data[(r)] += riskdiff; 
+      denom_private[(r)] += riskdiff; 
     
     if (Outcomes[rowobs] > 0 )
     {
       newlk_private += xbdif * weights[rowobs];
-      efron_wt_private_data[(time_index_exit)] += riskdiff;
+      efron_wt_private[(time_index_exit)] += riskdiff;
     }
   }
 }
