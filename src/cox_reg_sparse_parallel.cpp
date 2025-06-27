@@ -5,6 +5,9 @@
 #include <omp.h>
 #include <RcppParallel.h>
 #include "utils.h"
+#include <iostream>
+#include <fstream>
+#include <string>
 #ifdef _DEBUG
     #define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )
     // Replace _NORMAL_BLOCK with _CLIENT_BLOCK if you want the
@@ -101,7 +104,7 @@ using namespace Rcpp;
  //' @return Void: see the model data input list for the output.
  //' @export
  // [[Rcpp::export]]
-Rcpp::List cox_reg_sparse_parallel(  
+int cox_reg_sparse_parallel(  
                               IntegerVector obs_in,
                               DoubleVector  coval_in,
                               DoubleVector  weights_in,
@@ -120,7 +123,8 @@ Rcpp::List cox_reg_sparse_parallel(
                               double theta_in ,
                               int MSTEP_MAX_ITER,
                               double MAX_EPS,
-                              long unsigned int threadn) {
+                              long unsigned int threadn,
+                              std::string outfile_stub) {
    omp_set_dynamic(0);     // Explicitly disable dynamic teams
    omp_set_num_threads(threadn); // Use 8 threads for all consecutive parallel regions
    _CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
@@ -153,27 +157,40 @@ Rcpp::List cox_reg_sparse_parallel(
    double frailty_penalty = 0.0;
    Rcout << "MSTEP_MAX_ITER : " << MSTEP_MAX_ITER << " maxobs : " << maxobs <<" ntimes : " << ntimes << " maxid :  " << maxid << " nvar : " << nvar << " nallvar : " << nallvar << std::endl;
    Rcout << "Allocating vectors, ";
-   std::vector<R_xlen_t > frailty_group_events(maxid,0); // Count of events for each patient (for gamma penalty weight)   
-   std::vector<double> theta_history(MSTEP_MAX_ITER,0.0);
-   std::vector<double> thetalkl_history(MSTEP_MAX_ITER,-std::numeric_limits<double>::infinity());
+   // std::vector<R_xlen_t > frailty_group_events(maxid,0); // Count of events for each patient (for gamma penalty weight)   
+   // std::vector<double> theta_history(MSTEP_MAX_ITER,0.0);
+   // std::vector<double> thetalkl_history(MSTEP_MAX_ITER,-std::numeric_limits<double>::infinity());
+   int* frailty_group_events = new int[maxid](); // Count of events for each patient (for gamma penalty weight)   
+   double* theta_history = new double[MSTEP_MAX_ITER]();
+   double*  thetalkl_history = new double[MSTEP_MAX_ITER]{-std::numeric_limits<double>::infinity()};
   // std::vector<double> denom(ntimes,0.0);      // sum of risk of all patients at each time point
   // std::vector<double> efron_wt(ntimes,0.0);  // Sum of risk of patients with events at each time point
-  double* denom = new double[ntimes]{0.0};
-  double* efron_wt = new double[ntimes]{0.0};
-  double* denom_private = new double[ntimes]{0.0};
-  double* efron_wt_private = new double[ntimes]{0.0};
-  double* wt_average = new double[ntimes]{0.0};
-//   std::vector<double> wt_average(ntimes,0.0);  // Average weight of people with event at each time point.
-   std::vector<double> zbeta(maxobs,0.0);
-   double* derivMatrix = new double[ntimes*4]{0.0};
-   std::vector<double> step(nallvar,1.0);
-   std::vector<double> gdiagbeta(nvar,0.0);
-   std::vector<double> gdiagfrail(maxid,0.0);
-   Rcpp::DoubleVector frailty_r(maxid);
-   Rcpp::DoubleVector beta_r(nvar);
-   Rcpp::DoubleVector basehaz_r(ntimes);
-   Rcpp::DoubleVector cumhaz_r(ntimes);
-   Rcpp::DoubleVector ModelSummary_r(8);
+  double* denom = new double[ntimes](); // default zero initialisation
+  double* efron_wt = new double[ntimes]();
+  double* denom_private = new double[ntimes]();
+  double* efron_wt_private = new double[ntimes]();
+  double* wt_average = new double[ntimes]();
+   double* zbeta = new double[maxobs]();
+   
+   double* frailty = new double[maxid]();
+   double* beta = new double[nvar]();
+   double*  basehaz = new double[ntimes]();
+   double* cumhaz = new double[ntimes]();
+   
+   double* derivMatrix = new double[ntimes*4]();
+   double* step = new double[nallvar]{1.0};
+   double*gdiagbeta = new double[nvar]();
+   double* gdiagfrail = new double[maxid]();
+   double* ModelSummary = new double[8]();
+   // std::vector<double> step(nallvar,1.0);
+   // std::vector<double> gdiagbeta(nvar,0.0);
+   // std::vector<double> gdiagfrail(maxid,0.0);
+   // ModelSummary_r(8)
+//   Rcpp::DoubleVector frailty_r(maxid);
+//   Rcpp::DoubleVector beta_r(nvar);
+//   Rcpp::DoubleVector basehaz_r(ntimes);
+//   Rcpp::DoubleVector cumhaz_r(ntimes);
+//   Rcpp::DoubleVector ModelSummary_r(8);
 
    Rcout << "setting to zero, ";
 
@@ -216,11 +233,11 @@ Rcpp::List cox_reg_sparse_parallel(
   // Rcpp::DoubleVector basehaz(ntimes);
   // Rcpp::DoubleVector cumhaz(ntimes);
   // Rcpp::DoubleVector beta(nvar);
-   RcppParallel::RVector<double> basehaz(basehaz_r);
-   RcppParallel::RVector<double> cumhaz(cumhaz_r);
-   RcppParallel::RVector<double> beta(beta_r);
-   RcppParallel::RVector<double> frailty(frailty_r);
-   RcppParallel::RVector<double> ModelSummary(ModelSummary_r);
+   // RcppParallel::RVector<double> basehaz(basehaz_r);
+   // RcppParallel::RVector<double> cumhaz(cumhaz_r);
+   // RcppParallel::RVector<double> beta(beta_r);
+   // RcppParallel::RVector<double> frailty(frailty_r);
+   // RcppParallel::RVector<double> ModelSummary(ModelSummary_r);
 
    int iter_theta = 0;
    double inner_EPS = 1e-5;
@@ -954,6 +971,7 @@ for (R_xlen_t  ir = 0 ; ir < ntimes; ir++)
             
           }
         }
+    
       }
       
       Rcout << std::endl << " theta: " << theta << " correction " << lik_correction << " newlk " << newlk  << std::endl << std::endl;
@@ -972,6 +990,13 @@ for (R_xlen_t  ir = 0 ; ir < ntimes; ir++)
 
 Rcout << std::endl << "Final betas " <<  std::endl;
 for (R_xlen_t  i = 0; i < nvar; i ++) Rcout << beta[i] << " ";
+
+std::ofstream outfile;
+outfile.open(outfile_stub +"beta.csv" );
+  for (R_xlen_t  i = 0; i < nvar - 1; i ++) outfile << beta[i] << ", " ;
+  outfile << std::defaultfloat << std::setprecision(std::numeric_limits<long double>::digits10) << beta[nvar-1] << std::endl;
+outfile.close();
+
 Rcout << '\n';
 Rcout << "Log likelihood : "  << loglik + lik_correction << std::endl;
 Rcout << "Theta : "  << theta << std::endl;
@@ -985,15 +1010,21 @@ Rcout << " Calculating baseline hazard..." ;
 
 if (recurrent == 1)
 {
-#pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty_mean) //reduction(+:zbeta[:maxobs])
+  std::ofstream outfile1;
+  outfile1.open(outfile_stub +"frailty.csv");
+    outfile1 << "frailty" << std::endl;
+//#pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty_mean) //reduction(+:zbeta[:maxobs])
   for (R_xlen_t  i = 0; i < maxid; i++) // +
   { /* per observation time calculations */
-for (R_xlen_t  idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
-{
-#pragma omp atomic
-  zbeta[idn[idi] - 1] -= frailty_mean ; // should be one frailty per person / observation
-}
+    for (R_xlen_t  idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
+    {
+//    #pragma omp atomic
+      zbeta[idn[idi] - 1] -= frailty_mean ; // should be one frailty per person / observation
+    }
+    outfile1 << std::defaultfloat << std::setprecision(std::numeric_limits<long double>::digits10) << frailty[i] << std::endl;
   }
+  outfile1.close();
+  
 }
 
 
@@ -1023,6 +1054,13 @@ Rcout << " Calculating cumulative baseline hazard..." ;
 /* Carry forward last value of basehazard */
 double last_value = 0.0;
 
+std::ofstream outfile2;
+outfile2.open(outfile_stub +"basehaz.csv");
+  outfile2 << "basehaz" << std::endl;
+std::ofstream outfile3;
+outfile3.open(outfile_stub +"cumhaz.csv");
+  outfile3 << "cumhaz" << std::endl;
+
 cumhaz[0] = basehaz[0] ;
 for (R_xlen_t  t = 0; t < ntimes; t++)
 {
@@ -1034,17 +1072,13 @@ for (R_xlen_t  t = 0; t < ntimes; t++)
   {
     last_value = basehaz[t];
   }
+  outfile2 << std::defaultfloat << std::setprecision(std::numeric_limits<long double>::digits10) << basehaz[t] << std::endl;
+  outfile3 << std::defaultfloat << std::setprecision(std::numeric_limits<long double>::digits10) << cumhaz[t] << std::endl;
 }
+outfile2.close();
+outfile3.close();
 Rcout << " done" <<std::endl;
 
- Rcout << " Freeing arrays..." ;
-
-delete[] denom;
-delete[] efron_wt;
-delete[] denom_private;
-delete[] efron_wt_private;
-delete[] wt_average;  
-delete[] derivMatrix;
 
 /*
 #pragma omp parallel for  default(none)  shared(ntimes,frailty_mean, cumhaz1year,cumhazEntry, cumhaz, BaseHazardEntry, Risk, basehaz, timein, zbeta, weights, maxobs)
@@ -1073,20 +1107,52 @@ ModelSummary[6] = iter_theta < 2 ? fabs(1.0 - (newlk / loglik)) : fabs(1.0 - (th
 ModelSummary[7] = frailty_mean;
 
 Rcout << " Returning : " ;
+std::ofstream outfile4;
+outfile4.open(outfile_stub + "ModelSummary.csv");
+  
 for(R_xlen_t  i = 0; i < 8; i++) Rcout << ModelSummary[i] << ", ";
-
 Rcout <<  std::endl;
 
-Rcpp::List returnList = List::create(Named("Beta") = beta_r ,
-                                  _["Frailty"] = frailty_r, 
-                                    _["basehaz"] = basehaz_r,
-                                  _["cumhaz"] = cumhaz_r,
-                                  _["ModelSummary"] = ModelSummary_r);
+outfile4 << "logli,lik_correction,total_loglik,theta,outer_iter,inner_convergence,outer_convergence,frailty_mean," <<std::endl;
+for(R_xlen_t  i = 0; i < 8; i++) outfile4 << std::defaultfloat << std::setprecision(std::numeric_limits<long double>::digits10) << ModelSummary[i] << ", ";
+outfile4 << std::endl;
+outfile4.close();
 
-Rcout << "Return list created" << std::endl;
-return(returnList);
+
 Rcout << " Returned\n " ;
+
+
+// Rcpp::List returnList = List::create(Named("Beta") = beta ,
+//                                   _["Frailty"] = frailty, 
+//                                     _["basehaz"] = basehaz,
+//                                   _["cumhaz"] =cumhaz,
+//                                   _["ModelSummary"] = ModelSummary);
+// 
+// Rcout << "Return list created" << std::endl;
+
+Rcout << " Freeing arrays..." ;
+
+delete[] denom;
+delete[] efron_wt;
+delete[] denom_private;
+delete[] efron_wt_private;
+delete[] wt_average;  
+delete[] derivMatrix;
+delete[]  frailty_group_events ;
+delete[]  theta_history;
+delete[]  thetalkl_history;
+delete[]  zbeta ;
+delete[]  step ;
+delete[]  gdiagbeta ;
+delete[]  gdiagfrail;
+delete[]  ModelSummary;
+Rcout << " Freed\n " ;
+
+
+
 _CrtDumpMemoryLeaks();
+return(0);
+//return(returnList);
  }
  
  
