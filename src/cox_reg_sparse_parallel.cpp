@@ -160,9 +160,9 @@ int cox_reg_sparse_parallel(
    // std::vector<R_xlen_t > frailty_group_events(maxid,0); // Count of events for each patient (for gamma penalty weight)   
    // std::vector<double> theta_history(MSTEP_MAX_ITER,0.0);
    // std::vector<double> thetalkl_history(MSTEP_MAX_ITER,-std::numeric_limits<double>::infinity());
-   int* frailty_group_events = new int[maxid](); // Count of events for each patient (for gamma penalty weight)   
-   double* theta_history = new double[MSTEP_MAX_ITER]();
-   double*  thetalkl_history = new double[MSTEP_MAX_ITER]{-std::numeric_limits<double>::infinity()};
+  int* frailty_group_events = new int[maxid](); // Count of events for each patient (for gamma penalty weight)   
+  double* theta_history = new double[MSTEP_MAX_ITER+ 1]();
+  double* thetalkl_history = new double[MSTEP_MAX_ITER + 1]{-std::numeric_limits<double>::infinity()};
   // std::vector<double> denom(ntimes,0.0);      // sum of risk of all patients at each time point
   // std::vector<double> efron_wt(ntimes,0.0);  // Sum of risk of patients with events at each time point
   double* denom = new double[ntimes](); // default zero initialisation
@@ -170,18 +170,18 @@ int cox_reg_sparse_parallel(
   double* denom_private = new double[ntimes]();
   double* efron_wt_private = new double[ntimes]();
   double* wt_average = new double[ntimes]();
-   double* zbeta = new double[maxobs]();
-   
-   double* frailty = new double[maxid]();
-   double* beta = new double[nvar]();
-   double*  basehaz = new double[ntimes]();
-   double* cumhaz = new double[ntimes]();
-   
-   double* derivMatrix = new double[ntimes*4]();
-   double* step = new double[nallvar]{1.0};
-   double*gdiagbeta = new double[nvar]();
-   double* gdiagfrail = new double[maxid]();
-   double* ModelSummary = new double[8]();
+  double* zbeta = new double[maxobs]();
+  
+  double* frailty = new double[maxid]();
+  double* beta = new double[nvar]();
+  double*  basehaz = new double[ntimes]();
+  double* cumhaz = new double[ntimes]();
+  
+  double* derivMatrix = new double[ntimes*4]();
+  double* step = new double[nallvar]{1.0};
+  double* gdiagbeta = new double[nvar]();
+  double* gdiagfrail = new double[maxid]();
+  double* ModelSummary = new double[8]();
    // std::vector<double> step(nallvar,1.0);
    // std::vector<double> gdiagbeta(nvar,0.0);
    // std::vector<double> gdiagfrail(maxid,0.0);
@@ -395,7 +395,7 @@ newlk_private = 0.0;
     double risk = exp(zbeta_temp ) * weights[rowobs];
     zbeta[rowobs] = zbeta_temp;
     //cumumlative sums for all patients
-    for (R_xlen_t  r = time_index_exit; r > time_index_entry ; r--)
+    for (R_xlen_t  r = time_index_exit; r >= time_index_entry ; r--)
       denom[r] += risk;
     
     if (Outcomes[rowobs] > 0 )
@@ -455,7 +455,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
           double covali = coval[row] ;
           double derivFirst = risk * covali;
           double derivSecond = derivFirst * covali;
-          for (R_xlen_t  r = time_index_exit ; r >time_index_entry ; r--) // keep int for calculations of indices then cast
+          for (R_xlen_t  r = time_index_exit ; r >= time_index_entry ; r--) // keep int for calculations of indices then cast
           {
             derivMatrix[r] += derivFirst;
             derivMatrix[ntimes + r] += derivSecond;
@@ -560,7 +560,7 @@ for (R_xlen_t  ir = 0 ; ir < ntimes; ir++)
             R_xlen_t  time_index_entry =  timein[rowobs] - 1;
             R_xlen_t  time_index_exit =  timeout[rowobs] - 1;
             
-            for (R_xlen_t  r = time_index_exit; r > time_index_entry ; r--)
+            for (R_xlen_t  r = time_index_exit; r >= time_index_entry ; r--)
               denom_private[(r)] += riskdiff; 
             
             if (Outcomes[rowobs] > 0 )
@@ -614,7 +614,7 @@ for (R_xlen_t  ir = 0 ; ir < ntimes; ir++)
           
           double risk = exp(zbeta[rowobs]) * weights[rowobs];
           
-          for (R_xlen_t  r = time_index_exit ; r >time_index_entry ; r--) derivMatrix_private[r] += risk; // keep int for calculations of indices then cast
+          for (R_xlen_t  r = time_index_exit ; r >= time_index_entry ; r--) derivMatrix_private[r] += risk; // keep int for calculations of indices then cast
           
           if (Outcomes[rowobs] > 0) derivMatrix_private[ntimes +  time_index_exit] += risk ;
           
@@ -691,7 +691,7 @@ for (R_xlen_t  ir = 0 ; ir < ntimes; ir++)
           R_xlen_t  time_index_entry =  timein[rowobs] - 1;
           R_xlen_t  time_index_exit =  timeout[rowobs] - 1;
           
-          for (R_xlen_t  r = time_index_exit; r > time_index_entry ; r--)
+          for (R_xlen_t  r = time_index_exit; r >= time_index_entry ; r--)
             denom_private[r] += riskdiff; // need to update exp(xb1 + xb2 + ) + exp(x2b1 + x2b2 +)
           
           if (Outcomes[rowobs] > 0 )
@@ -1010,9 +1010,9 @@ Rcout << " Calculating baseline hazard..." ;
 
 if (recurrent == 1)
 {
-  std::ofstream outfile1;
-  outfile1.open(outfile_stub +"frailty.csv");
-    outfile1 << "frailty" << std::endl;
+ // std::ofstream outfile1;
+ // outfile1.open(outfile_stub +"frailty.csv");
+ //   outfile1 << "frailty" << std::endl;
 //#pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty_mean) //reduction(+:zbeta[:maxobs])
   for (R_xlen_t  i = 0; i < maxid; i++) // +
   { /* per observation time calculations */
@@ -1021,9 +1021,9 @@ if (recurrent == 1)
 //    #pragma omp atomic
       zbeta[idn[idi] - 1] -= frailty_mean ; // should be one frailty per person / observation
     }
-    outfile1 << std::defaultfloat << std::setprecision(std::numeric_limits<long double>::digits10) << frailty[i] << std::endl;
+  //  outfile1 << std::defaultfloat << std::setprecision(std::numeric_limits<long double>::digits10) << frailty[i] << std::endl;
   }
-  outfile1.close();
+ // outfile1.close();
   
 }
 
@@ -1138,14 +1138,14 @@ delete[] denom_private;
 delete[] efron_wt_private;
 delete[] wt_average;  
 delete[] derivMatrix;
-delete[]  frailty_group_events ;
-delete[]  theta_history;
-delete[]  thetalkl_history;
-delete[]  zbeta ;
-delete[]  step ;
-delete[]  gdiagbeta ;
-delete[]  gdiagfrail;
-delete[]  ModelSummary;
+delete[] frailty_group_events ;
+delete[] theta_history;
+delete[] thetalkl_history;
+delete[] zbeta ;
+delete[] step ;
+delete[] gdiagbeta ;
+delete[] gdiagfrail;
+delete[] ModelSummary;
 Rcout << " Freed\n " ;
 
 
