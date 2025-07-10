@@ -3,7 +3,6 @@
 #include <omp.h>
 #include <RcppParallel.h>
 using namespace Rcpp;
-//using namespace RcppParallel;
 //' profile_ci
 //'
 //' @description

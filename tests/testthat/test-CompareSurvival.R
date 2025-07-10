@@ -1,3 +1,6 @@
+pkgbuild::compiler_flags(debug = F)
+pkgbuild::compile_dll(debug = F)
+
 library(coxsparse)
 library(RcppParallel)
 library(testthat)
@@ -131,20 +134,20 @@ setThreadOptions(numThreads = 32)
 
 lambda = 0.00
 
-# CoxRegListParallelbeta <- list()
+ CoxRegListParallelbeta <- list()
 
-# CoxRegListParallelbeta[['Beta']] <- vector('double',length(covstart))
-# CoxRegListParallelbeta[['Frailty']] <- vector('double',length(idstart))
-# CoxRegListParallelbeta[['basehaz']] <- vector('double',max(timeout))
-# CoxRegListParallelbeta[['cumhaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbeta[['Beta']] <- vector('double',length(covstart))
+ CoxRegListParallelbeta[['Frailty']] <- vector('double',length(idstart))
+ CoxRegListParallelbeta[['basehaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbeta[['cumhaz']] <- vector('double',max(timeout))
 # #CoxRegListParallelbeta[['BaseHazardEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbeta[['cumhazEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbeta[['cumhaz1year']] <- vector('double',max(obs))
 # #CoxRegListParallelbeta[['Risk']] <- vector('double',max(obs))
-# CoxRegListParallelbeta[['ModelSummary']] <- vector('double',8)
+ CoxRegListParallelbeta[['ModelSummary']] <- vector('double',8)
 
 Sys.time()
-system.time(cox_reg_sparse_parallel(#modeldata = CoxRegListParallelbeta,#beta_in = CoxRegListParallelbeta[['Beta']] ,
+system.time(coxsparse::cox_reg_sparse_parallel(modeldata = CoxRegListParallelbeta,#beta_in = CoxRegListParallelbeta[['Beta']] ,
                                                                     #frailty_in = CoxRegListParallelbeta[['Frailty']],
                                                  #basehaz_in  = CoxRegListParallelbeta[['basehaz']],
                                                  #cumhaz_in = CoxRegListParallelbeta[['cumhaz']] ,
@@ -171,14 +174,13 @@ system.time(cox_reg_sparse_parallel(#modeldata = CoxRegListParallelbeta,#beta_in
                                                     theta_in = 0,
                                                     MSTEP_MAX_ITER = 100,
                                                     MAX_EPS = 1e-10,
-                                                    threadn = 32,
-                                                  outfile_stub = 'Data_/models/CoxRegListParallelbeta'))
+                                                    threadn = 32))
 Sys.time() # 17 s
 
-CoxRegListParallelbeta <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetabeta.csv'))),
-                                  'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetabasehaz.csv')),
-                                  'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetacumhaz.csv')),
-                               'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetaModelSummary.csv')) )
+# CoxRegListParallelbeta <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetabeta.csv'))),
+#                                   'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetabasehaz.csv')),
+#                                   'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetacumhaz.csv')),
+#                                'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetaModelSummary.csv')) )
 
 
 names(CoxRegListParallelbeta$Beta) <- c('age', 'year', 'surgery', 'transplant')
@@ -261,7 +263,7 @@ rats.dt <- rbind(rats.dt[,.(id,rx,stop,event, sex, start)],data.table::data.tabl
                                                                                "start" = c(3,8,10)
                                                   ))
 
-rats.dt <- data.table::rbindlist(lapply(1:10,function(i) cbind(rats.dt, rats.dt$id+((i-1) * max(rats.dt$id)))))
+rats.dt <- data.table::rbindlist(lapply(1:100,function(i) cbind(rats.dt, rats.dt$id+((i-1) * max(rats.dt$id)))))
 rats.dt[,id := V2]
 rats.dt[,obs := .I]
 
@@ -369,17 +371,17 @@ weights <- runif(length(Outcomes))
 setThreadOptions(numThreads = 32)
 set.seed(235739801)
 lambda = 0
-# CoxRegListParallelbetanoFrailty <- list()
+ CoxRegListParallelbetanoFrailty <- list()
 
-# CoxRegListParallelbetanoFrailty[['Beta']] <- vector('double',length(covstart))
-# CoxRegListParallelbetanoFrailty[['Frailty']] <- vector('double',length(idstart))
-# CoxRegListParallelbetanoFrailty[['basehaz']] <- vector('double',max(timeout))
-# CoxRegListParallelbetanoFrailty[['cumhaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbetanoFrailty[['Beta']] <- vector('double',length(covstart))
+ CoxRegListParallelbetanoFrailty[['Frailty']] <- vector('double',length(idstart))
+ CoxRegListParallelbetanoFrailty[['basehaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbetanoFrailty[['cumhaz']] <- vector('double',max(timeout))
 # #CoxRegListParallelbetanoFrailty[['BaseHazardEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbetanoFrailty[['cumhazEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbetanoFrailty[['cumhaz1year']] <- vector('double',max(obs))
 # #CoxRegListParallelbetanoFrailty[['Risk']] <- vector('double',max(obs))
-# CoxRegListParallelbetanoFrailty[['ModelSummary']] <- vector('double',8)
+ CoxRegListParallelbetanoFrailty[['ModelSummary']] <- vector('double',8)
 
 weights <- runif(length(Outcomes))
 Sys.time()
@@ -387,7 +389,7 @@ Sys.time()
 system.time(coxnofrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex  ,weights = rep(1,length(weights)),  data = rats.dt))
 Sys.time()
 
-system.time(cox_reg_sparse_parallel(#modeldata = CoxRegListParallelbetanoFrailty, #beta_in = CoxRegListParallelbetanoFrailty[['Beta']] ,
+system.time(cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetanoFrailty, #beta_in = CoxRegListParallelbetanoFrailty[['Beta']] ,
                                                            #frailty_in = CoxRegListParallelbetanoFrailty[['Frailty']],
                                                        #    basehaz_in  = CoxRegListParallelbetanoFrailty[['basehaz']],
                                                       #     cumhaz_in = CoxRegListParallelbetanoFrailty[['cumhaz']] ,
@@ -414,16 +416,15 @@ system.time(cox_reg_sparse_parallel(#modeldata = CoxRegListParallelbetanoFrailty
                                                          theta_in = 0,
                                                          MSTEP_MAX_ITER = 10,
                                                          MAX_EPS = 1e-10,
-                                                         threadn = 32,
-                                                         outfile_stub = "Data_/models/CoxRegListParallelbetanoFrailty"
+                                                         threadn = 32
                                                           ))
 Sys.time()
 
 
-CoxRegListParallelbetanoFrailty <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtybeta.csv'))),
-                               'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtybasehaz.csv')),
-                               'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtycumhaz.csv')),
-                               'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtyModelSummary.csv')) )
+# CoxRegListParallelbetanoFrailty <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtybeta.csv'))),
+#                                'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtybasehaz.csv')),
+#                                'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtycumhaz.csv')),
+#                                'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetanoFrailtyModelSummary.csv')) )
 
 
 names(CoxRegListParallelbetanoFrailty$Beta) <- c('rx', 'sex')
@@ -449,24 +450,24 @@ coxfrail<- survival::coxph(Surv(start, stop, event) ~ rx + sex + frailty(id, tra
 setThreadOptions(numThreads = 32)
 set.seed(235739801)
 lambda =0
-# CoxRegListParallelbetaFrailty <- list()
+ CoxRegListParallelbetaFrailty <- list()
 
-# CoxRegListParallelbetaFrailty[['Beta']] <- vector('double',length(covstart))
-# CoxRegListParallelbetaFrailty[['Frailty']] <- vector('double',length(idstart))
-# CoxRegListParallelbetaFrailty[['basehaz']] <- vector('double',max(timeout))
-# CoxRegListParallelbetaFrailty[['cumhaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbetaFrailty[['Beta']] <- vector('double',length(covstart))
+ CoxRegListParallelbetaFrailty[['Frailty']] <- vector('double',length(idstart))
+ CoxRegListParallelbetaFrailty[['basehaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbetaFrailty[['cumhaz']] <- vector('double',max(timeout))
 # #CoxRegListParallelbetaFrailty[['BaseHazardEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbetaFrailty[['cumhazEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbetaFrailty[['cumhaz1year']] <- vector('double',max(obs))
 # #CoxRegListParallelbetaFrailty[['Risk']] <- vector('double',max(obs))
-# CoxRegListParallelbetaFrailty[['ModelSummary']] <- vector('double',8)
+ CoxRegListParallelbetaFrailty[['ModelSummary']] <- vector('double',8)
 
 weights <- runif(length(Outcomes))
 Sys.time()
 history <- list()
 # i <- 1
 # while( done == 0) {
-system.time(cox_reg_sparse_parallel(#modeldata = CoxRegListParallelbetaFrailty,#beta_in = CoxRegListParallelbetaFrailty[['Beta']] ,
+system.time(cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailty,#beta_in = CoxRegListParallelbetaFrailty[['Beta']] ,
                                                           #frailty_in = CoxRegListParallelbetaFrailty[['Frailty']],
                                                         #   basehaz_in  = CoxRegListParallelbetaFrailty[['basehaz']],
                                                          #  cumhaz_in = CoxRegListParallelbetaFrailty[['cumhaz']] ,
@@ -493,18 +494,16 @@ system.time(cox_reg_sparse_parallel(#modeldata = CoxRegListParallelbetaFrailty,#
                                                          theta_in = 0,
                                                            MSTEP_MAX_ITER = 20,
                                                            MAX_EPS = 1e-9,
-                                                           threadn = 32,
-                                                         outfile_stub = "Data_/models/CoxRegListParallelbetaFrailty"
-                                                         ))
+                                                           threadn = 32))
  
 
-CoxRegListParallelbetaFrailty <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtybeta.csv'))),
-                                        'Frailty' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtyfrailty.csv')),
-                                        'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtybasehaz.csv')),
-                                        'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtycumhaz.csv')),
-                                        'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtyModelSummary.csv')) )
+# CoxRegListParallelbetaFrailty <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtybeta.csv'))),
+#                                         'Frailty' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtyfrailty.csv')),
+#                                         'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtybasehaz.csv')),
+#                                         'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtycumhaz.csv')),
+#                                         'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtyModelSummary.csv')) )
 
-expect_equal(c(t(CoxRegListParallelbetaFrailty$Frailty)-unlist(CoxRegListParallelbetaFrailty$ModelSummary[,8])),
+expect_equal(c(t(CoxRegListParallelbetaFrailty$Frailty)-unlist(CoxRegListParallelbetaFrailty$ModelSummary[8])),
 as.vector(coxfrail$frail),tolerance = 10-9)
 
 names(CoxRegListParallelbetaFrailty$Beta) <- c('rx', 'sex')
@@ -540,7 +539,7 @@ CoxRegListParallelbetaFrailty$Beta
 par(mfrow = c(2,2))
 hist(coxfrail$frail)
 hist(c(t(CoxRegListParallelbetaFrailty$Frailty)))
-hist(c(t(CoxRegListParallelbetaFrailty$Frailty)-unlist(CoxRegListParallelbetaFrailty$ModelSummary[,8])))
+hist(c(t(CoxRegListParallelbetaFrailty$Frailty)-unlist(CoxRegListParallelbetaFrailty$ModelSummary[8])))
 
 # rxloglik <- function(beta,max,rats.dt) {
 #   temp <- survival::coxph(Surv(start, stop, event) ~ offset(beta*rx) + sex + frailty(id, trace =F) ,weights = rep(1,length(weights)),  data = rats.dt)
@@ -569,7 +568,7 @@ profileCI <- profile_ci(beta_in = c(CoxRegListParallelbetaFrailty$Beta),
                         idstart_in = idstart,
                         idend_in = idend,
                          lambda = lambda,
-                         theta_in = c(CoxRegListParallelbetaFrailty$ModelSummary$theta),
+                         theta_in = c(CoxRegListParallelbetaFrailty$ModelSummary[8]),
                          MSTEP_MAX_ITER = 100000,
                          decimals = 10,
                          confint_width = 0.95,
@@ -601,17 +600,17 @@ system.time(coxfrailpenal <- survival::coxph(Surv(start, stop, event) ~ ridge(rx
 
 set.seed(235739801)
 
-# CoxRegListParallelbetaFrailtypenal <- list()
+ CoxRegListParallelbetaFrailtypenal <- list()
 
-# CoxRegListParallelbetaFrailtypenal[['Beta']] <- vector('double',length(covstart))
-# CoxRegListParallelbetaFrailtypenal[['Frailty']] <- vector('double',length(idstart))
-# CoxRegListParallelbetaFrailtypenal[['basehaz']] <- vector('double',max(timeout))
-# CoxRegListParallelbetaFrailtypenal[['cumhaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbetaFrailtypenal[['Beta']] <- vector('double',length(covstart))
+ CoxRegListParallelbetaFrailtypenal[['Frailty']] <- vector('double',length(idstart))
+ CoxRegListParallelbetaFrailtypenal[['basehaz']] <- vector('double',max(timeout))
+ CoxRegListParallelbetaFrailtypenal[['cumhaz']] <- vector('double',max(timeout))
 # #CoxRegListParallelbetaFrailtypenal[['BaseHazardEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbetaFrailtypenal[['cumhazEntry']] <- vector('double',max(obs))
 # #CoxRegListParallelbetaFrailtypenal[['cumhaz1year']] <- vector('double',max(obs))
 # #CoxRegListParallelbetaFrailtypenal[['Risk']] <- vector('double',max(obs))
-# CoxRegListParallelbetaFrailtypenal[['ModelSummary']] <- vector('double',8)
+ CoxRegListParallelbetaFrailtypenal[['ModelSummary']] <- vector('double',8)
 
 weights <- runif(length(Outcomes))
 Sys.time()
@@ -624,7 +623,7 @@ history <- list()
 # 0.81    0.15    0.23 
 
 system.time(
- cox_reg_sparse_parallel(#modeldata = CoxRegListParallelbetaFrailtypenal,
+ cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetaFrailtypenal,
                         #beta_in = CoxRegListParallelbetaFrailtypenal[['Beta']] ,
                         #frailty_in = CoxRegListParallelbetaFrailty[['Frailty']],
                         #basehaz_in  = CoxRegListParallelbetaFrailtypenal[['basehaz']],
@@ -652,16 +651,15 @@ system.time(
                         theta_in = 0,
                         MSTEP_MAX_ITER = 20,
                         MAX_EPS = 1e-9,
-                        threadn = 32,outfile_stub = "Data_/models/CoxRegListParallelbetaFrailtypenal"
-                        )
+                        threadn = 32)
   )
 
 
-CoxRegListParallelbetaFrailtypenal <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalbeta.csv'))),
-                                      'Frailty' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalfrailty.csv')),
-                                      'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalbasehaz.csv')),
-                                      'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalcumhaz.csv')),
-                                      'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalModelSummary.csv')) )
+# CoxRegListParallelbetaFrailtypenal <- list('Beta' = unlist(fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalbeta.csv'))),
+#                                       'Frailty' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalfrailty.csv')),
+#                                       'basehaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalbasehaz.csv')),
+#                                       'cumhaz' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalcumhaz.csv')),
+#                                       'ModelSummary' = fread(file = paste0('Data_/models/CoxRegListParallelbetaFrailtypenalModelSummary.csv')) )
 
 
 rbind(coef(coxnofrail),
@@ -674,5 +672,5 @@ rbind(coef(coxnofrail),
 names(CoxRegListParallelbetaFrailtypenal$Beta) <- c('ridge(rx)', 'ridge(sex)')
 expect_equal(CoxRegListParallelbetaFrailtypenal$Beta,
              coxfrailpenal$coefficients,tolerance = 10-9)
-expect_equal(c(t(CoxRegListParallelbetaFrailtypenal$Frailty))-unlist(CoxRegListParallelbetaFrailtypenal$ModelSummary[,8]),
+expect_equal(c(t(CoxRegListParallelbetaFrailtypenal$Frailty))-unlist(CoxRegListParallelbetaFrailtypenal$ModelSummary[8]),
              coxfrailpenal$frail,tolerance = 10-9)

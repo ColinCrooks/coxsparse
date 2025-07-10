@@ -39,10 +39,6 @@ to bw filled with the fitted frailty terms on linear predictor scale
 for each unique observed time. calculated with the fitted coefficients and Efron weights.
 \item cumhaz - double vector of length of max(timeout) for cumulative hazard values calculated
 from the baseline hazard values.
-\item BaseHazardEntry - double vector of max(obs) for baseline hazard at each individual observation.
-\item cumhazEntry - double vector of max(obs) for cumulative hazard at each individual observation.
-\item cumhaz1year - double vector of max(obs) for cumulative hazard one year after each individual observation.
-\item Risk - double vector of max(obs) for exp(xb) at each individual observation.
 \item ModelSummary - double vector of length 8 to contain individual values:
 ** loglik - log likelihood of the model without gamma penalty
 ** lik_correction - gamma correction for the loglikelihood for including frailty terms

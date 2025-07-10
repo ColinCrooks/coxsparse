@@ -2,10 +2,89 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #' cox_reg_sparse_parallel
-NULL
-
-cox_reg_sparse_parallel <- function(obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn, outfile_stub) {
-    .Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn, outfile_stub)
+#' 
+#' @description
+#' Implementation of a Cox proportional hazards model using 
+#' a sparse data structure. The model is fitted with cyclical 
+#' coordinate descent (after Mittal et al (2013).
+#' OpenMP is used to parallelise the updating of cumulative 
+#' values and rcppParallel objects are used to make R objects
+#' threadsafe.
+#' 
+#' @details
+#' The purpose of this implementation is for fitting a Cox model
+#' to data when coxph from the survival package fails due to
+#' not enough memory to hold the model and data matrices. The
+#' focus is therefore on being memory efficient, which is a 
+#' slower algorithm than in coxph, but parallelisation is 
+#' possible to offset this. In this situation compiling the 
+#' code for the native computer setup would be preferable
+#' to providing a standard package binary for multiple systems.
+#' The Makevars file therefore contains the options for this.
+#'
+#' The data structure is a deconstructed sparse matrix.
+#' 
+#' A function using the same data structure to calculate profile
+#' confidence intervals with a crude search pattern is provided.
+#' 
+#' @param modeldata A list in R of vectors within which to retun the model output.
+#' Needs to follow this naming convention of the lists: 
+#' * Beta - double vector of length of covariates to be filled with fitted coefficients.
+#' * Frailty - double vector of length of frailty terms (e.g. number of unique patients) 
+#' to bw filled with the fitted frailty terms on linear predictor scale 
+#'   (w in xb + Zw). Exponentiate for the relative scale. No centring applied.
+#' * basehaz - double vector of length of max(timeout) for baseline hazard values 
+#' for each unique observed time. calculated with the fitted coefficients and Efron weights.
+#' * cumhaz - double vector of length of max(timeout) for cumulative hazard values calculated 
+#' from the baseline hazard values.
+#' * ModelSummary - double vector of length 8 to contain individual values:
+#' ** loglik - log likelihood of the model without gamma penalty
+#' ** lik_correction - gamma correction for the loglikelihood for including frailty terms
+#' ** loglik + lik_correction - the total log likelihood of the model
+#' ** theta - the value of theta used in the model
+#' ** outer_iter - the number of outer iterations performed
+#' ** final convergence of inner loop for covariates abs(1-newlk/loglik)
+#' ** final convergence of outer loop for theta
+#' ** frailty_mean - the mean of the frailty terms so they can be centred log(mean(exp(frailty)))
+#' @param obs_in An integer vector referencing for each covariate value the
+#' corresponding unique patient time in the time and outcome vectors. Of the
+#' same length as coval. The maximum value is the length of timein and timeout.
+#' @param coval_in A double vector of each covariate value sorted first by 
+#' time then by patient and by order of the covariates to be included in model.
+#' Of the same longth as obs_in.
+#' @param weights_in A double vector of weights to be applied to each unique
+#' patient time point. Of the same length as timein, timeout and outcomes. 
+#' @param  timein_in An integer vector of the start time for each unique patient 
+#' time row, so would be the time that a patient's corresponding
+#' covariate value starts. Of the same length as weights, timeout, and outcomes.
+#' @param timeout_in An integer vector of the end time for each unique patient
+#' time row, so would be the time that a patient's corresponding outcome
+#' occurs. Of the same length as weights, timein, timeout and outcomes.
+#' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the 
+#' corresponding unique patient time. Of the same length as timein, timeout and 
+#' weights
+#' @param OutcomeTotals_in An integer vector of the total number of outcomes that
+#' occur at each unique time point. Length is the number of unique times in cohort.
+#' @param OutcomeTotalTimes_in An integer vector of each unique time point that
+#' outcome events are observed in the cohort. Same length as OutcomeTotals.
+#' @param covn_in An integer vector mapping covariates sorted by covariate to the 
+#' corresponding covariate value row in coval sorted by time and id
+#' @param covstart_in An integer vector of the start row for each covariate in covn_in
+#' @param covend_in An integer vector of the end row for each covariate in covn_in
+#' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
+#' corresponding row in observations sorted by time and id
+#' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
+#' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
+#' @param lambda Penalty weight to include for ridge regression: -log(sqrt(lambda)) * nvar
+#' @param theta_in An input starting value for theta or can be set to zero.
+#' @param MSTEP_MAX_ITER Maximum number of iterations
+#' @param MAX_EPS Threshold for maximum step change in liklihood for convergence. 
+#' @param threadn Number of threads to be used - caution as will crash if specify more 
+#' threads than available memory for copying data for each thread.
+#' @return Void: see the model data input list for the output.
+#' @export
+cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
+    invisible(.Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covn_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn))
 }
 
 #' profile_ci
