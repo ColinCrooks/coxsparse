@@ -31,34 +31,36 @@ using namespace Rcpp;
 //'
 //' @param beta_in A double vector of starting values for the coefficients
 //' of length nvar.
-//' @param obs_in An integer vector referencing for each covariate value the
+//' @param obs_in An integer vector referencing for each covariate value (sorting as coval) the
 //' corresponding unique patient time in the time and outcome vectors. Of the
 //' same length as coval. The maximum value is the length of timein and timeout.
-//' @param coval_in A double vector of each covariate value sorted first by
-//' time then by patient and by order of the covariates to be included in model.
-//' Of the same longth as obs_in.
+//' @param coval_in A double vector of each covariate value sorted first by order 
+//' of the covariates then by time then by patient and to be included in model.
+//' Of the same longth as obs_in. 
+//' coval_in[i] ~ timein_in[obs_in[i]], timeout_in[obs_in[i]], Outcomes_in[obs_in[i]],  
 //' @param weights_in A double vector of weights to be applied to each unique
-//' patient time point. Of the same length as timein, timeout and outcomes.
-//' @param frailty_in A double vector of the frailty term for each unique patient.
-//' @param timein_in An integer vector of the start time for each unique patient
+//' patient time point. Of the same length as timein, timeout and outcomes. 
+//' Sorted by time out, time in, and patient id. 
+//' @param  timein_in An integer vector of the start time for each unique patient 
 //' time row, so would be the time that a patient's corresponding
-//' covariate value starts. Of the same length as weights, timeout, and outcomes.
+//' covariate value starts. Of the same length as weights, timeout, and outcomes. 
+//' Sorted by time out, time in, and patient id
 //' @param timeout_in An integer vector of the end time for each unique patient
 //' time row, so would be the time that a patient's corresponding outcome
-//' occurs. Of the same length as weights, timein, timeout and outcomes.
-//' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the
-//' corresponding unique patient time. Of the same length as timein, timeout and
-//' weights
+//' occurs. Of the same length as weights, timein, timeout and outcomes. Sorted by time out, time in, and patient id
+//' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the 
+//' corresponding unique patient time. Of the same length as timein, timeout and 
+//' weights. Sorted by time out, time in, and patient id 
 //' @param OutcomeTotals_in An integer vector of the total number of outcomes that
-//' occur at each unique time point. Length is the number of unique times in cohort.
+//' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
 //' @param OutcomeTotalTimes_in An integer vector of each unique time point that
-//' outcome events are observed in the cohort. Same length as OutcomeTotals.
-//' @param covn_in An integer vector mapping covariates sorted by covariate to the 
-//' corresponding covariate value row in coval sorted by time and id
-//' @param covstart_in An integer vector of the start row for each covariate in covn_in
-//' @param covend_in An integer vector of the end row for each covariate in covn_in
+//' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
+//' @param covstart_in An integer vector of the start row for each covariate in coval 
+//' @param covend_in An integer vector of the end row for each covariate in coval
 //' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
-//' corresponding row in observations sorted by time and id
+//' corresponding row in observations sorted by time out, time in, and patient id
+//' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
+//' are the rows listed between idn_in[idstart_in[i]]:idn_in[idend_in[i]] 
 //' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
 //' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 //' @param lambda Penalty weight to include for ridge regression:-log(sqrt(lambda)) * nvar
@@ -84,7 +86,6 @@ using namespace Rcpp;
      IntegerVector Outcomes_in ,
      IntegerVector OutcomeTotals_in ,
      IntegerVector OutcomeTotalTimes_in,
-     IntegerVector covn_in,
      IntegerVector covstart_in,
      IntegerVector covend_in,
      IntegerVector idn_in,
@@ -150,12 +151,11 @@ using namespace Rcpp;
    RcppParallel::RVector<int> obs(obs_in);
    RcppParallel::RVector<int> timein(timein_in);
    RcppParallel::RVector<int> timeout(timeout_in);
-   RcppParallel::RVector<int>  covn(covn_in);
-   RcppParallel::RVector<int>  covstart(covstart_in);
-   RcppParallel::RVector<int>  covend(covend_in);
-   RcppParallel::RVector<int>  idn(idn_in);
-   RcppParallel::RVector<int>  idstart(idstart_in);
-   RcppParallel::RVector<int>  idend(idend_in);
+   RcppParallel::RVector<int> covstart(covstart_in);
+   RcppParallel::RVector<int> covend(covend_in);
+   RcppParallel::RVector<int> idn(idn_in);
+   RcppParallel::RVector<int> idstart(idstart_in);
+   RcppParallel::RVector<int> idend(idend_in);
    
    double step = 1/pow(10,decimals);
    double  d2sum = 0.0;
@@ -243,7 +243,7 @@ for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTi
    
    double beta_local =  beta[i] ;
      
-#pragma omp parallel  default(none) shared(i, covstart, covend, covn, maxobs, coval, beta_local,  obs, zbeta) //reduction(+:zbeta[:maxobs])
+#pragma omp parallel  default(none) shared(i, covstart, covend, maxobs, coval, beta_local,  obs, zbeta) //reduction(+:zbeta[:maxobs])
 {
   double* zbeta_private = new double [maxobs];
   for (int ir = 0; ir < maxobs; ir++) zbeta_private[ir] = 0.0;
@@ -251,9 +251,8 @@ for(int r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTi
 #pragma omp for
   for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
   {
-    int row = covn[covi] - 1; // R_xlen_t is signed long, size_t is unsigned. R vectors use signed so all numbers should be below 2,147,483,647
-    int rowobs =  obs[row] - 1 ;
-    double covali =  coval[row] ;
+    int rowobs =  obs[covi] - 1 ;
+    double covali =  coval[covi] ;
     zbeta_private[rowobs] += beta_local * covali ;
   }
   
@@ -378,7 +377,7 @@ for (int i = 0; i < nvar; i++)
       
       
       double updatelk_private = 0.0;
-#pragma omp parallel  default(none) reduction(+:updatelk_private)  shared(denom_update,efron_wt_update,zbeta,covstart, covend,covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
+#pragma omp parallel  default(none) reduction(+:updatelk_private)  shared(denom_update,efron_wt_update,zbeta,covstart, covend, coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
 {
   double *denom_private = new double [ntimes];
   double *efron_wt_private= new double [ntimes];
@@ -392,11 +391,10 @@ for (int i = 0; i < nvar; i++)
 #pragma omp for
   for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
   {
-    int row = (covn[covi] - 1); // R_xlen_t is signed long, size_t is unsigned. R vectors use signed so use int throughout
-    int rowobs =  (obs[row] - 1) ;
+    int rowobs =  (obs[covi] - 1) ;
     
     double riskold = exp(zbeta[rowobs] ); // + frailty_old_temp
-    double covali =  coval[row] ;
+    double covali =  coval[covi] ;
     double xbdif = dif * covali ; // don't update zbeta when only patient level frailty terms updated!
     
     double zbeta_updated = zbeta[(rowobs)] - xbdif;
@@ -469,7 +467,7 @@ updatelk -= updatelk_private;
         efron_wt_update[ir] = efron_wt[ir];
       }
   updatelk_private = 0.0;
-#pragma omp parallel  default(none) reduction(+:updatelk_private)  shared(denom_update,efron_wt_update,zbeta,covstart, covend,covn, coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
+#pragma omp parallel  default(none) reduction(+:updatelk_private)  shared(denom_update,efron_wt_update,zbeta,covstart, covend,coval, weights, Outcomes, ntimes, obs, timein, timeout, dif, i, nvar)///*,  denom, efron_wt, newlk*/)
 {
   double *denom_private = new double [ntimes];
   double *efron_wt_private= new double [ntimes];
@@ -483,14 +481,13 @@ updatelk -= updatelk_private;
 #pragma omp for
   for (int covi = covstart[i] - 1; covi < covend[i]; covi++)
   {
-    int row = (covn[covi] - 1); // R_xlen_t is signed long, size_t is unsigned. R vectors use signed so use int throughout
-    int rowobs =  (obs[row] - 1) ;
+    int rowobs =  (obs[covi] - 1) ;
     
     double riskold = exp(zbeta[rowobs] ); // + frailty_old_temp
-    double covali =  coval[row] ;
+    double covali =  coval[covi] ;
     double xbdif = dif * covali ; // don't update zbeta when only patient level frailty terms updated!
     
-    double zbeta_updated = zbeta[(rowobs)] - xbdif;
+    double zbeta_updated = zbeta[rowobs] - xbdif;
     zbeta_updated =  zbeta_updated >22 ? 22 : zbeta_updated;
     zbeta_updated =  zbeta_updated < -200 ? -200 :  zbeta_updated;
     
