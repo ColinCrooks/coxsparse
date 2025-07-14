@@ -30,7 +30,7 @@ A function using the same data structure to calculate profile
 confidence intervals with a crude search pattern is provided.
 }
 \author{
-\strong{Maintainer}: Colin Crooks \email{colin.crooks@nottingham.ac.uk}
+\strong{Maintainer}: Colin Crooks \email{colin.crooks@nottingham.ac.uk} (\href{https://orcid.org/0000-0002-6983-2759}{ORCID})
 
 
 Colin Crooks <colin,crooks@nottingham.ac.uk>

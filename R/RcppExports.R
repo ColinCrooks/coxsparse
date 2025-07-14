@@ -128,6 +128,7 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' @param weights_in A double vector of weights to be applied to each unique
 #' patient time point. Of the same length as timein, timeout and outcomes. 
 #' Sorted by time out, time in, and patient id. 
+#' @param frailty_in A double vector of frailty estimates for each idsorted by id.
 #' @param  timein_in An integer vector of the start time for each unique patient 
 #' time row, so would be the time that a patient's corresponding
 #' covariate value starts. Of the same length as weights, timeout, and outcomes. 

@@ -7,19 +7,19 @@ Authors@R: c(
     person(
       "Colin", "Crooks",
       email = "colin.crooks@nottingham.ac.uk",
-      role = c("aut", "cre")
+      role = c("aut", "cre"),
+        comment = c(ORCID = "0000-0002-6983-2759")
     )
   )
 Description: Fits a Cox proportional hazards model to sparse data using cyclical coordinate descent and parallelised (after Mittal et al (2013).
 License: GPL (>= 2)
 Depends: Rcpp, data.table, survival
 Imports: RcppParallel (>= 5.1.10)
+Suggests: testthat
 LinkingTo: Rcpp, RcppParallel
 Roxygen: list(markdown = TRUE)
 Byte-Compile: yes
 SystemRequirements: GNU make
-Suggests: 
-   survival,   Rcpp (>= 1.0.14),testthat (>= 3.0.0), data.table
 Config/testthat/edition: 3
 Encoding: UTF-8
 RoxygenNote: 7.3.2

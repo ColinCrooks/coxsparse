@@ -15,7 +15,6 @@ profile_ci(
   Outcomes_in,
   OutcomeTotals_in,
   OutcomeTotalTimes_in,
-  covn_in,
   covstart_in,
   covend_in,
   idn_in,
@@ -33,46 +32,48 @@ profile_ci(
 \item{beta_in}{A double vector of starting values for the coefficients
 of length nvar.}
 
-\item{obs_in}{An integer vector referencing for each covariate value the
+\item{obs_in}{An integer vector referencing for each covariate value (sorting as coval) the
 corresponding unique patient time in the time and outcome vectors. Of the
 same length as coval. The maximum value is the length of timein and timeout.}
 
-\item{coval_in}{A double vector of each covariate value sorted first by
-time then by patient and by order of the covariates to be included in model.
-Of the same longth as obs_in.}
+\item{coval_in}{A double vector of each covariate value sorted first by order
+of the covariates then by time then by patient and to be included in model.
+Of the same longth as obs_in.
+coval_in\link{i} ~ timein_in[obs_in\link{i}], timeout_in[obs_in\link{i}], Outcomes_in[obs_in\link{i}],}
 
 \item{weights_in}{A double vector of weights to be applied to each unique
-patient time point. Of the same length as timein, timeout and outcomes.}
+patient time point. Of the same length as timein, timeout and outcomes.
+Sorted by time out, time in, and patient id.}
 
-\item{frailty_in}{A double vector of the frailty term for each unique patient.}
+\item{frailty_in}{A double vector of frailty estimates for each idsorted by id.}
 
 \item{timein_in}{An integer vector of the start time for each unique patient
 time row, so would be the time that a patient's corresponding
-covariate value starts. Of the same length as weights, timeout, and outcomes.}
+covariate value starts. Of the same length as weights, timeout, and outcomes.
+Sorted by time out, time in, and patient id}
 
 \item{timeout_in}{An integer vector of the end time for each unique patient
 time row, so would be the time that a patient's corresponding outcome
-occurs. Of the same length as weights, timein, timeout and outcomes.}
+occurs. Of the same length as weights, timein, timeout and outcomes. Sorted by time out, time in, and patient id}
 
 \item{Outcomes_in}{An integer vector of 0 (censored) or 1 (outcome) for the
 corresponding unique patient time. Of the same length as timein, timeout and
-weights}
+weights. Sorted by time out, time in, and patient id}
 
 \item{OutcomeTotals_in}{An integer vector of the total number of outcomes that
-occur at each unique time point. Length is the number of unique times in cohort.}
+occur at each unique time point. Length is the number of unique times in cohort. Sorted by time}
 
 \item{OutcomeTotalTimes_in}{An integer vector of each unique time point that
-outcome events are observed in the cohort. Same length as OutcomeTotals.}
+outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time}
 
-\item{covn_in}{An integer vector mapping covariates sorted by covariate to the
-corresponding covariate value row in coval sorted by time and id}
+\item{covstart_in}{An integer vector of the start row for each covariate in coval}
 
-\item{covstart_in}{An integer vector of the start row for each covariate in covn_in}
-
-\item{covend_in}{An integer vector of the end row for each covariate in covn_in}
+\item{covend_in}{An integer vector of the end row for each covariate in coval}
 
 \item{idn_in}{An integer vector mapping unique patient IDs sorted by ID to the
-corresponding row in observations sorted by time and id}
+corresponding row in observations sorted by time out, time in, and patient id
+For id = i the corresponding rows in time_in, timeout_in and Outcomes_in
+are the rows listed between idn_in[idstart_in\link{i}]:idn_in[idend_in\link{i}]}
 
 \item{idstart_in}{An integer vector of the start row for each unique patient ID in idn_in}
 
