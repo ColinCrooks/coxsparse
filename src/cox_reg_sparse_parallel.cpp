@@ -1,7 +1,9 @@
 #include <Rcpp.h>
 #include <omp.h>
 #include <RcppParallel.h>
+#include <RcppInt64>
 #include "utils.h"
+
 using namespace Rcpp;
 //' cox_reg_sparse_parallel
 //' 
@@ -22,7 +24,16 @@ using namespace Rcpp;
 //' possible to offset this. In this situation compiling the 
 //' code for the native computer setup would be preferable
 //' to providing a standard package binary for multiple systems.
-//' The Makevars file therefore contains the options for this.
+//' The Makevars file therefore contains the options for this. 
+//' 
+//' The total number of observations is allowed to exceed the 
+//' maximum integer size in R, so the indexing into covariates
+//' needs to use integer64 vectors as defined in the bit64 package,
+//' and uses the functions kindly provided by Dirk Eddelbuettel for
+//' conversion to C++ vectors (https://github.com/eddelbuettel/RcppInt64).
+//' If number of observations and/or ID also exceed the maximum integer size in R
+//' then the other vectors will also need changing to integer64 vectors. But
+//' this has not currently done to save memory where possible.
 //'
 //' The data structure is a deconstructed sparse matrix.
 //' 
@@ -72,8 +83,9 @@ using namespace Rcpp;
 //' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
 //' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 //' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
-//' @param covstart_in An integer vector of the start row for each covariate in coval 
-//' @param covend_in An integer vector of the end row for each covariate in coval
+//' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
+//' Uses 
+//' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
 //' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 //' corresponding row in observations sorted by time out, time in, and patient id
 //' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
@@ -98,8 +110,8 @@ void cox_reg_sparse_parallel( List modeldata,
                               IntegerVector Outcomes_in ,
                               IntegerVector OutcomeTotals_in ,
                               IntegerVector OutcomeTotalTimes_in,
-                              IntegerVector covstart_in,
-                              IntegerVector covend_in,
+                              NumericVector covstart_in,
+                              NumericVector covend_in,
                               IntegerVector idn_in,
                               IntegerVector idstart_in,
                               IntegerVector idend_in,
@@ -120,8 +132,8 @@ void cox_reg_sparse_parallel( List modeldata,
    // Vectors from R index begin from 1. Need to convert to 0 index for C++ and comparisons
    //Mittal, S., Madigan, D., Burd, R. S., & Suchard, M. a. (2013). High-dimensional, massive sample-size Cox proportional hazards regression for survival analysis. Biostatistics (Oxford, England), 1–15. doi:10.1093/biostatistics/kxt043
    
-   R_xlen_t  ntimes = max(timeout_in);  // Unique times but don't accumulate for time 0 as no events
-   R_xlen_t  maxobs = max(obs_in);
+   R_xlen_t  ntimes = Rcpp::max(timeout_in);  // Unique times but don't accumulate for time 0 as no events
+   R_xlen_t  maxobs = Rcpp::max(obs_in);
    R_xlen_t  nvar = covstart_in.length();
    R_xlen_t  maxid = idstart_in.length(); // Number of unique patients
    bool recurrent = maxid > 0;
@@ -141,7 +153,7 @@ void cox_reg_sparse_parallel( List modeldata,
    Rcout << "MSTEP_MAX_ITER : " << MSTEP_MAX_ITER << " maxobs : " << maxobs <<" ntimes : " << ntimes << " maxid :  " << maxid << " nvar : " << nvar << " nallvar : " << nallvar << std::endl;
 
    //   Rcout << "Allocating vectors, ";
-   int* frailty_group_events = new int[maxid](); // Count of events for each patient (for gamma penalty weight)   
+   int64_t * frailty_group_events = new int64_t [maxid](); // Count of events for each patient (for gamma penalty weight)   
    double* theta_history = new double[MSTEP_MAX_ITER]();
    double* thetalkl_history = new double[MSTEP_MAX_ITER]{-std::numeric_limits<double>::infinity()};
    double* denom = new double[ntimes](); // default zero initialisation
@@ -166,16 +178,22 @@ void cox_reg_sparse_parallel( List modeldata,
    Rcpp::DoubleVector ModelSummary_in =modeldata["ModelSummary"];
 
 //   Rcout << "wrapping R vectors, ";
-   RcppParallel::RVector<double> coval(coval_in);
+
    RcppParallel::RVector<double> weights(weights_in);
+   
    RcppParallel::RVector<int> Outcomes(Outcomes_in);
    RcppParallel::RVector<int> OutcomeTotals(OutcomeTotals_in);
    RcppParallel::RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
-   RcppParallel::RVector<int> obs(obs_in);
+   
    RcppParallel::RVector<int> timein(timein_in);
    RcppParallel::RVector<int> timeout(timeout_in);
-   RcppParallel::RVector<int>  covstart(covstart_in);
-   RcppParallel::RVector<int>  covend(covend_in);
+   
+   RcppParallel::RVector<int> obs(obs_in);    
+   RcppParallel::RVector<double> coval(coval_in);   
+   
+   std::vector<int64_t> covstart = Rcpp::fromInteger64(covstart_in); 
+   std::vector<int64_t> covend =Rcpp::fromInteger64(covend_in); 
+   
    RcppParallel::RVector<int>  idn(idn_in);
    RcppParallel::RVector<int>  idstart(idstart_in);
    RcppParallel::RVector<int>  idend(idend_in);

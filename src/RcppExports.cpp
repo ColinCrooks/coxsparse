@@ -11,7 +11,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // cox_reg_sparse_parallel
-void cox_reg_sparse_parallel(List modeldata, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, IntegerVector covstart_in, IntegerVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
+void cox_reg_sparse_parallel(List modeldata, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
 RcppExport SEXP _coxsparse_cox_reg_sparse_parallel(SEXP modeldataSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP OutcomeTotals_inSEXP, SEXP OutcomeTotalTimes_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP MAX_EPSSEXP, SEXP threadnSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,8 +24,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerVector >::type Outcomes_in(Outcomes_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type OutcomeTotals_in(OutcomeTotals_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type OutcomeTotalTimes_in(OutcomeTotalTimes_inSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type covstart_in(covstart_inSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type covend_in(covend_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covstart_in(covstart_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covend_in(covend_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type idn_in(idn_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type idstart_in(idstart_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type idend_in(idend_inSEXP);
@@ -39,7 +39,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // profile_ci
-NumericMatrix profile_ci(DoubleVector beta_in, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, DoubleVector frailty_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, IntegerVector covstart_in, IntegerVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, int decimals, double confint_width, int threadn);
+NumericMatrix profile_ci(DoubleVector beta_in, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, DoubleVector frailty_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, int decimals, double confint_width, int threadn);
 RcppExport SEXP _coxsparse_profile_ci(SEXP beta_inSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP frailty_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP OutcomeTotals_inSEXP, SEXP OutcomeTotalTimes_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP decimalsSEXP, SEXP confint_widthSEXP, SEXP threadnSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -54,8 +54,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerVector >::type Outcomes_in(Outcomes_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type OutcomeTotals_in(OutcomeTotals_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type OutcomeTotalTimes_in(OutcomeTotalTimes_inSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type covstart_in(covstart_inSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type covend_in(covend_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covstart_in(covstart_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covend_in(covend_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type idn_in(idn_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type idstart_in(idstart_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type idend_in(idend_inSEXP);

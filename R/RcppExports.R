@@ -20,7 +20,16 @@
 #' possible to offset this. In this situation compiling the 
 #' code for the native computer setup would be preferable
 #' to providing a standard package binary for multiple systems.
-#' The Makevars file therefore contains the options for this.
+#' The Makevars file therefore contains the options for this. 
+#' 
+#' The total number of observations is allowed to exceed the 
+#' maximum integer size in R, so the indexing into covariates
+#' needs to use integer64 vectors as defined in the bit64 package,
+#' and uses the functions kindly provided by Dirk Eddelbuettel for
+#' conversion to C++ vectors (https://github.com/eddelbuettel/RcppInt64).
+#' If number of observations and/or ID also exceed the maximum integer size in R
+#' then the other vectors will also need changing to integer64 vectors. But
+#' this has not currently done to save memory where possible.
 #'
 #' The data structure is a deconstructed sparse matrix.
 #' 
@@ -70,8 +79,9 @@
 #' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
 #' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 #' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
-#' @param covstart_in An integer vector of the start row for each covariate in coval 
-#' @param covend_in An integer vector of the end row for each covariate in coval
+#' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
+#' Uses 
+#' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
 #' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 #' corresponding row in observations sorted by time out, time in, and patient id
 #' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
@@ -107,6 +117,15 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' @details
 #' A function using the same data structure to calculate profile
 #' confidence intervals with a crude search pattern is provided.
+#' 
+#' The total number of observations*covariates is allowed to exceed the 
+#' maximum integer size in R, so the indexing into covariates
+#' needs to use integer64 vectors as defined in the bit64 package,
+#' and uses the functions kindly provided by Dirk Eddelbuettel for
+#' conversion to C++ vectors (https://github.com/eddelbuettel/RcppInt64).
+#' If number of observations and/or ID also exceed the maximum integer size in R
+#' then the other vectors will also need changing to integer64 vectors. But
+#' this has not currently done to save memory where possible.
 #'
 #' The data structure is a deconstructed sparse matrix.
 #'
@@ -143,8 +162,8 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
 #' @param OutcomeTotalTimes_in An integer vector of each unique time point that
 #' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
-#' @param covstart_in An integer vector of the start row for each covariate in coval 
-#' @param covend_in An integer vector of the end row for each covariate in coval
+#' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
+#' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
 #' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 #' corresponding row in observations sorted by time out, time in, and patient id
 #' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
@@ -165,6 +184,9 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 profile_ci <- function(beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn) {
     .Call('_coxsparse_profile_ci', PACKAGE = 'coxsparse', beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn)
 }
+
+#' https://gallery.rcpp.org/articles/creating-integer64-and-nanotime-vectors/
+NULL
 
 safelog <- function(x) {
     .Call('_coxsparse_safelog', PACKAGE = 'coxsparse', x)

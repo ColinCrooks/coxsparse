@@ -1,6 +1,6 @@
 pkgbuild::compiler_flags(debug = F)
 pkgbuild::compile_dll(debug = F)
-
+library(bit64)
 library(coxsparse)
 library(RcppParallel)
 library(testthat)
@@ -56,15 +56,15 @@ rm(idtable,id)
 #################################################################
 data.table::setkeyv(heart.dt, tvidvars)
 
-covstart <- 1
+covstart <- as.integer64(1)
 covbuild <- data.table("rowobs" = integer(), coval = double())
 i <- 1
 for (x in covlist)
 {
   if(i == 1) {
-    covstart <- 1 
+    covstart <- as.integer64(1) 
   } else {
-    covstart <-  c(covstart,covend[length(covend)] + 1)
+    covstart <-  c(covstart,as.integer64(covend[length(covend)] + 1))
   }
   heart.dt[is.finite(x),(x) := as.double(x)]
   covbuild <- rbind(covbuild,
@@ -75,9 +75,9 @@ for (x in covlist)
                                  with = F],
                     use.names=FALSE)
   if(i == 1) {
-    covend <- nrow(covbuild)
+    covend <- as.integer64(nrow(covbuild))
     } else {
-     covend <- c(covend,nrow(covbuild))
+     covend <- c(covend,as.integer64(nrow(covbuild)))
     }
   i <- i + 1
 }
@@ -177,15 +177,15 @@ data.table::setkeyv(rats.dt, idtimevar)
 rats.dt[,rowobs := .I]
 ####################################################################
 
-covstart <- 1
+covstart <- as.integer64(1)
 covbuild <- data.table("rowobs" = integer(), coval = double())
 i <- 1
 for (x in covlist)
 {
   if(i == 1) {
-    covstart <- 1 
+    covstart <- as.integer64(1) 
   } else {
-    covstart <-  c(covstart,covend[length(covend)] + 1)
+    covstart <-  c(covstart,as.integer64(covend[length(covend)] + 1))
   }
   rats.dt[is.finite(x),(x) := as.double(x)]
   covbuild <- rbind(covbuild,
@@ -196,9 +196,9 @@ for (x in covlist)
                              with = F],
                     use.names=FALSE)
   if(i == 1) {
-    covend <- nrow(covbuild)
+    covend <- as.integer64(nrow(covbuild))
   } else {
-    covend <- c(covend,nrow(covbuild))
+    covend <- c(covend,as.integer64(nrow(covbuild)))
   }
   i <- i + 1
 }

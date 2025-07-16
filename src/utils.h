@@ -1,4 +1,4 @@
-
+// Rcpp::NumericVector makeInt64(std::vector<int64_t> v);
 double safelog (double x);
 double safesqrt (double x);
 // double brent_maximize(double ax, double bx,
