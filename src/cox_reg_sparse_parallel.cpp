@@ -420,7 +420,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
           newlk -= (beta[i] * beta[i]) / (2.0 * lambda);// Include iteration penalty for this covariate
         }
 
-        Rcout << "updating zbeta and denominator, ";
+        Rcout << i <<  ", ";
 
 /* Update cumulative sums dependent on denominator and zbeta so need to accumulate updates then apply them*/
         newlk_private = 0.0;
@@ -618,7 +618,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
     
     
     
-    Rcpp::Rcout << " Iter:  " << iter << " Cox likelihood : " << newlk << "   last likelihood :" << loglik << " theta " << theta << "\n";
+    Rcpp::Rcout << "\n Iter:  " << iter << " Cox likelihood : " << newlk << "   last likelihood :" << loglik << " theta " << theta << "\n";
     /* Check for convergence */
     
     if ((iter > 0) &&  (fabs(1.0 - (newlk / loglik))) <= MAX_EPS) break;

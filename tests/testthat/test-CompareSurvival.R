@@ -9,6 +9,8 @@ covlist <- c('age','year','surgery','transplant')
 reshapevars <- c(idvars,covlist)
 heart <- survival::heart
 heart.dt <- data.table::setDT(data.table::copy(heart))
+heart.dt$start <- heart.dt$start + 1
+heart.dt$stop <- heart.dt$stop + 1
 heart.dt <- rbind(heart.dt,data.table::data.table("start" = c(3,8,10),
                     "stop"  = c(5,9,18),
                     "event" = c(0,1,0),
@@ -154,7 +156,8 @@ data.table::setnames(rats.dt, 'time', 'stop')
 data.table::setnames(rats.dt, 'litter', 'id')
 data.table::setnames(rats.dt, 'status', 'event')
 
-
+rats.dt$start <- rats.dt$start + 1
+rats.dt$stop <- rats.dt$stop + 1
 rats.dt <- rbind(rats.dt[,.(id,rx,stop,event, sex, start)],data.table::data.table("id" = (max(rats.dt$id)+1):(max(rats.dt$id)+6),
                                                                                "rx"   = c(0,0,0),
                                                                                "stop"  = c(5,9,18),
@@ -426,3 +429,31 @@ expect_equal(CoxRegListParallelbetaFrailtypenal$Beta,
              coxfrailpenal$coefficients,tolerance = 10-9)
 expect_equal(c(t(CoxRegListParallelbetaFrailtypenal$Frailty))-unlist(CoxRegListParallelbetaFrailtypenal$ModelSummary[8]),
              coxfrailpenal$frail,tolerance = 10-9)
+
+
+risk <- coxsparse::predictrisk(beta_in = c(CoxRegListParallelbetaFrailtypenal$Beta),
+                        obs_in = obs,
+                        coval_in = coval,
+                        frailty_in = c(t(CoxRegListParallelbetaFrailtypenal$Frailty)),
+                        timein_in = timein ,
+                        timeout_in = timeout ,
+                        covstart_in = covstart,
+                        covend_in = covend,
+                        idn_in = idn,
+                        idstart_in = idstart,
+                        idend_in = idend,
+                        cumhaz_in = CoxRegListParallelbetaFrailtypenal$cumhaz,
+                        threadn = 32)
+
+expect_equal(coxfrailpenal$linear.predictors,risk$xb, tolerance = 1e-4)
+
+bh <- as.data.table(basehaz(coxfrailpenal))[J(1:max(timeout)),hazard,on = 'time', roll = Inf, rollends = c(F,T)][timein]
+bh[is.na(bh)]<- 0
+
+expect_equal(c(risk$Risk),
+c(exp(-bh)^exp(coxfrailpenal$linear.predictors)),
+tolerance = 1e-3
+)
+
+
+

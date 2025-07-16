@@ -38,6 +38,29 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// predictrisk
+List predictrisk(DoubleVector beta_in, IntegerVector obs_in, DoubleVector coval_in, DoubleVector frailty_in, IntegerVector timein_in, IntegerVector timeout_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, DoubleVector cumhaz_in, int threadn);
+RcppExport SEXP _coxsparse_predictrisk(SEXP beta_inSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP frailty_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP cumhaz_inSEXP, SEXP threadnSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< DoubleVector >::type beta_in(beta_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type obs_in(obs_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type coval_in(coval_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type frailty_in(frailty_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type timein_in(timein_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type timeout_in(timeout_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covstart_in(covstart_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covend_in(covend_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type idn_in(idn_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type idstart_in(idstart_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type idend_in(idend_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type cumhaz_in(cumhaz_inSEXP);
+    Rcpp::traits::input_parameter< int >::type threadn(threadnSEXP);
+    rcpp_result_gen = Rcpp::wrap(predictrisk(beta_in, obs_in, coval_in, frailty_in, timein_in, timeout_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, cumhaz_in, threadn));
+    return rcpp_result_gen;
+END_RCPP
+}
 // profile_ci
 NumericMatrix profile_ci(DoubleVector beta_in, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, DoubleVector frailty_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, IntegerVector OutcomeTotals_in, IntegerVector OutcomeTotalTimes_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, double lambda, double theta_in, int MSTEP_MAX_ITER, int decimals, double confint_width, int threadn);
 RcppExport SEXP _coxsparse_profile_ci(SEXP beta_inSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP frailty_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP OutcomeTotals_inSEXP, SEXP OutcomeTotalTimes_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP decimalsSEXP, SEXP confint_widthSEXP, SEXP threadnSEXP) {
@@ -94,6 +117,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_coxsparse_cox_reg_sparse_parallel", (DL_FUNC) &_coxsparse_cox_reg_sparse_parallel, 19},
+    {"_coxsparse_predictrisk", (DL_FUNC) &_coxsparse_predictrisk, 13},
     {"_coxsparse_profile_ci", (DL_FUNC) &_coxsparse_profile_ci, 21},
     {"_coxsparse_safelog", (DL_FUNC) &_coxsparse_safelog, 1},
     {"_coxsparse_safesqrt", (DL_FUNC) &_coxsparse_safesqrt, 1},
