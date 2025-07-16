@@ -16,7 +16,7 @@ License: GPL (>= 2)
 Depends: Rcpp, data.table, survival
 Imports: RcppParallel (>= 5.1.10)
 Suggests: testthat
-LinkingTo: Rcpp, RcppParallel,RcppInt64
+LinkingTo: Rcpp, RcppParallel
 Roxygen: list(markdown = TRUE)
 Byte-Compile: yes
 SystemRequirements: GNU make

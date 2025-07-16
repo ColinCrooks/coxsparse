@@ -66,9 +66,9 @@ occur at each unique time point. Length is the number of unique times in cohort.
 \item{OutcomeTotalTimes_in}{An integer vector of each unique time point that
 outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time}
 
-\item{covstart_in}{An integer vector of the start row for each covariate in coval}
+\item{covstart_in}{An integer64 (from package bit64) vector of the start row for each covariate in coval}
 
-\item{covend_in}{An integer vector of the end row for each covariate in coval}
+\item{covend_in}{An integer64 (from package bit64) vector of the end row for each covariate in coval}
 
 \item{idn_in}{An integer vector mapping unique patient IDs sorted by ID to the
 corresponding row in observations sorted by time out, time in, and patient id
@@ -110,6 +110,15 @@ The Makevars file therefore contains the options for this.
 \details{
 A function using the same data structure to calculate profile
 confidence intervals with a crude search pattern is provided.
+
+The total number of observations*covariates is allowed to exceed the
+maximum integer size in R, so the indexing into covariates
+needs to use integer64 vectors as defined in the bit64 package,
+and uses the functions kindly provided by Dirk Eddelbuettel for
+conversion to C++ vectors (https://github.com/eddelbuettel/RcppInt64).
+If number of observations and/or ID also exceed the maximum integer size in R
+then the other vectors will also need changing to integer64 vectors. But
+this has not currently done to save memory where possible.
 
 The data structure is a deconstructed sparse matrix.
 
