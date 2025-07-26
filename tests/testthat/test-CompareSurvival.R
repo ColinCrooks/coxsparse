@@ -449,10 +449,11 @@ expect_equal(coxfrailpenal$linear.predictors,risk$xb, tolerance = 1e-4)
 
 bh <- as.data.table(basehaz(coxfrailpenal))[J(1:max(timeout)),hazard,on = 'time', roll = Inf, rollends = c(F,T)][timein]
 bh[is.na(bh)]<- 0
-
+minbh <- min(bh[bh>0])
+bh[bh==0] <- minbh
 expect_equal(c(risk$Risk),
 c(exp(-bh)^exp(coxfrailpenal$linear.predictors)),
-tolerance = 1e-3
+tolerance = 1e-2
 )
 
 

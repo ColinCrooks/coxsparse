@@ -99,6 +99,7 @@ List predictrisk(
 R_xlen_t maxobs = max(obs_in);
 R_xlen_t nvar = covstart_in.length();
 R_xlen_t maxid = idstart_in.length(); // Number of unique patients
+R_xlen_t ntimes = max(timeout_in);
 bool recurrent = maxid > 0;
 
 Rcpp::DoubleVector  zbeta_r(maxobs);
@@ -128,6 +129,11 @@ RcppParallel::RVector<int> idend(idend_in);
 double frailty_sum = 0.0;
 double frailty_mean = 0.0;
 for(R_xlen_t  rowid = 0; rowid < maxid; rowid ++)  frailty_sum += exp(frailty[rowid]);
+
+
+double min_cumhaz = std::numeric_limits<double>::infinity();
+
+for (R_xlen_t t = 0; t < ntimes; t++) min_cumhaz = (cumhaz[t] > 1e-6 && (cumhaz[t] < min_cumhaz)) ? cumhaz[t] : min_cumhaz;
 
 frailty_mean = safelog(frailty_sum / maxid);
 
@@ -162,17 +168,19 @@ if (recurrent == 1)
 }
 
 /* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
-#pragma omp parallel  default(none) shared( zbeta, maxobs, timein,risk, cumhaz)
+#pragma omp parallel  default(none) shared( zbeta, maxobs, timein,risk, cumhaz, min_cumhaz)
 {
   #pragma omp for
   for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
   {
     R_xlen_t  time_index_entry = timein[rowobs] - 1; // std vectors use unsigned can be negative though for time 0
     
+    double tempch = (cumhaz[time_index_entry] == 0) ? min_cumhaz : cumhaz[time_index_entry];
+    
     double zbeta_temp = zbeta[rowobs] >22 ? 22 : zbeta[rowobs];
     zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
     zbeta[rowobs] = zbeta_temp;
-    risk[rowobs] = pow(exp(-cumhaz[time_index_entry]),exp(zbeta_temp));
+    risk[rowobs] = pow(exp(-tempch),exp(zbeta_temp));
   }  
 }
 
