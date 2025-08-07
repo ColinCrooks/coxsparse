@@ -617,7 +617,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
     }
     
     
-    Rcpp::Rcout << "\r" <<std::flush();
+    Rcpp::Rcout << "\r" <<std::flush;
     Rcpp::Rcout << "\r Iter:  " << iter << " Cox likelihood : " << newlk << "   last likelihood :" << loglik << " theta " << theta << "\n";
     /* Check for convergence */
     
