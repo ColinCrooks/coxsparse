@@ -75,10 +75,6 @@
 #' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the 
 #' corresponding unique patient time. Of the same length as timein, timeout and 
 #' weights. Sorted by time out, time in, and patient id 
-#' @param OutcomeTotals_in An integer vector of the total number of outcomes that
-#' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
-#' @param OutcomeTotalTimes_in An integer vector of each unique time point that
-#' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
 #' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
 #' Uses 
 #' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
@@ -96,8 +92,8 @@
 #' threads than available memory for copying data for each thread.
 #' @return Void: see the model data input list for the output.
 #' @export
-cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
-    invisible(.Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn))
+cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn) {
+    invisible(.Call('_coxsparse_cox_reg_sparse_parallel', PACKAGE = 'coxsparse', modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn))
 }
 
 #' predictrisk

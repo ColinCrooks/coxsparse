@@ -12,8 +12,6 @@ cox_reg_sparse_parallel(
   timein_in,
   timeout_in,
   Outcomes_in,
-  OutcomeTotals_in,
-  OutcomeTotalTimes_in,
   covstart_in,
   covend_in,
   idn_in,
@@ -74,12 +72,6 @@ occurs. Of the same length as weights, timein, timeout and outcomes. Sorted by t
 \item{Outcomes_in}{An integer vector of 0 (censored) or 1 (outcome) for the
 corresponding unique patient time. Of the same length as timein, timeout and
 weights. Sorted by time out, time in, and patient id}
-
-\item{OutcomeTotals_in}{An integer vector of the total number of outcomes that
-occur at each unique time point. Length is the number of unique times in cohort. Sorted by time}
-
-\item{OutcomeTotalTimes_in}{An integer vector of each unique time point that
-outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time}
 
 \item{covstart_in}{An integer64 (from package bit64) vector of the start row for each covariate in coval
 Uses}

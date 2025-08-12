@@ -79,10 +79,6 @@ using namespace Rcpp;
 //' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the 
 //' corresponding unique patient time. Of the same length as timein, timeout and 
 //' weights. Sorted by time out, time in, and patient id 
-//' @param OutcomeTotals_in An integer vector of the total number of outcomes that
-//' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
-//' @param OutcomeTotalTimes_in An integer vector of each unique time point that
-//' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
 //' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
 //' Uses 
 //' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
@@ -108,8 +104,6 @@ void cox_reg_sparse_parallel( List modeldata,
                               IntegerVector timein_in ,
                               IntegerVector timeout_in ,
                               IntegerVector Outcomes_in ,
-                              IntegerVector OutcomeTotals_in ,
-                              IntegerVector OutcomeTotalTimes_in,
                               NumericVector covstart_in,
                               NumericVector covend_in,
                               IntegerVector idn_in,
@@ -168,6 +162,8 @@ void cox_reg_sparse_parallel( List modeldata,
    double* gdiagbeta = new double[nvar]();
    double* gdiagfrail = new double[maxid]();
 
+   double* OutcomeCounts = new double[ntimes](); 
+
    /* Wrap all R objects to make thread safe for read and writing  */
    
 //   Rcout << "pointing to R vectors in list, ";
@@ -182,8 +178,8 @@ void cox_reg_sparse_parallel( List modeldata,
    RcppParallel::RVector<double> weights(weights_in);
    
    RcppParallel::RVector<int> Outcomes(Outcomes_in);
-   RcppParallel::RVector<int> OutcomeTotals(OutcomeTotals_in);
-   RcppParallel::RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
+ //  RcppParallel::RVector<int> OutcomeTotals(OutcomeTotals_in);
+ //  RcppParallel::RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
    
    RcppParallel::RVector<int> timein(timein_in);
    RcppParallel::RVector<int> timeout(timeout_in);
@@ -207,10 +203,40 @@ void cox_reg_sparse_parallel( List modeldata,
     RcppParallel::RVector<double> frailty(frailty_in);
     RcppParallel::RVector<double> ModelSummary(ModelSummary_in);
 
-   int iter_theta = 0;
-   double inner_EPS = 1e-5;
-   int done = 0;
-   
+  int iter_theta = 0;
+  double inner_EPS = 1e-5;
+  int done = 0;
+
+/* Weights can mean than some events are not counted, so need to recount event totals */  
+for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
+{
+      R_xlen_t  time_index_exit = timeout[rowobs] - 1;
+      if ( Outcomes[rowobs]*weights[rowobs] > 0 )
+      OutcomeCounts[time_index_exit] = OutcomeCounts[time_index_exit] + 1;
+}
+
+int64_t eventtimesN = 0;
+for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
+  if( OutcomeCounts[t] > 0)  eventtimesN = eventtimesN + 1;
+
+double* OutcomeTotals = new double[eventtimesN]();
+int64_t* OutcomeTotalTimes = new int64_t[eventtimesN]();
+
+R_xlen_t i = 0;
+for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
+{
+  if (OutcomeCounts[t] > 0) {
+    OutcomeTotals[i] = OutcomeCounts[t];
+    OutcomeTotalTimes[i] = t + 1;
+    i++;
+  }
+  
+}
+
+delete[] OutcomeCounts;
+
+//for (R_xlen_t r = 0; r < eventtimesN; r++) Rcout << OutcomeTotals[r] <<", "<< OutcomeTotalTimes[r] <<std::endl;
+
 //   Rcout << "counting numerators, ";
    for (R_xlen_t  i = 0; i < nvar; i++)
    { /* per observation time calculations */
@@ -221,11 +247,13 @@ void cox_reg_sparse_parallel( List modeldata,
      for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i] ; covi++) // iter over current covariates
      {
       R_xlen_t  rowobs = obs[covi] - 1 ;
-       if (Outcomes[rowobs] > 0 ) {
+       if (Outcomes[rowobs]*weights[rowobs] > 0 ) {
          gdiag_private +=  coval[covi] * weights[rowobs];// frailty not in derivative of beta
        }
      }
      gdiagbeta[i] = gdiag_private;
+//     Rcout << gdiagbeta[i] << ", "<< std::endl;
+     
    }
 //   Rcout << "adding in frailty to numerators (no atomic), ";
    if (recurrent == 1)
@@ -237,7 +265,7 @@ void cox_reg_sparse_parallel( List modeldata,
        for (R_xlen_t  idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
        {
          R_xlen_t  rowobs = idn[idi] - 1;  // R_xlen_t is signed long, size_t is unsigned. R long vectors use signed so all numbers should be below R_xlen_t 2^48
-         if (Outcomes[rowobs] > 0 ) 
+         if (Outcomes[rowobs]*weights[rowobs] > 0 ) 
          {
            gdiagfrail[i] += weights[rowobs]; // frailty not in derivative of beta
            frailty_group_events[i] += 1; // i is unique ID at this point so can write directly
@@ -254,11 +282,11 @@ void cox_reg_sparse_parallel( List modeldata,
   for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
   {
     R_xlen_t  time_index_exit = timeout[rowobs] - 1;
-    if (Outcomes[rowobs] > 0 )  wt_average[time_index_exit] += weights[rowobs];
+    if (Outcomes[rowobs]*weights[rowobs] > 0 )  wt_average[time_index_exit] += weights[rowobs];
   }
 }
 //Rcout << "averaging deaths at each time point, ";
-for(R_xlen_t  r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
+for(R_xlen_t  r = eventtimesN -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
 /* Set up */
 newlk = 0.0;
@@ -322,7 +350,7 @@ newlk_private = 0.0;
     for (R_xlen_t  r = time_index_exit;  r > time_index_entry ; r--)
       denom[r] += risk;
     
-    if (Outcomes[rowobs] > 0 )
+    if (Outcomes[rowobs]*weights[rowobs] > 0 )
     {
       /*cumumlative sums for event patients */
       newlk_private += zbeta_temp * weights[rowobs];
@@ -367,7 +395,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             derivMatrix[r] += derivFirst;
             derivMatrix[ntimes + r] += derivSecond;
           }
-          if (Outcomes[rowobs] > 0)
+          if (Outcomes[rowobs]*weights[rowobs] > 0)
           {
             
             derivMatrix[(2*ntimes) + time_index_exit] += derivFirst ;
@@ -377,7 +405,8 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
         }
 }
 
-        R_xlen_t  exittimesN = OutcomeTotalTimes.size() -1;
+
+        R_xlen_t  exittimesN = eventtimesN -1;
 //        Rcout << "calculating derivatives, ";
         for(R_xlen_t  r = exittimesN ; r >=0 ; r--)
         {
@@ -394,6 +423,10 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             hdiag += wt_average[time]*(((derivMatrix[ntimes + time] - (temp * derivMatrix[(3*ntimes) + time])) / d2) -
               (temp2 * temp2)) ;
           }
+          // if(  OutcomeTotals[r] >0 && r > exittimesN-1000) Rcout << "Time " << time << " gdiag " << gdiag<< " hdiag " <<
+          //   hdiag << " wt " << wt_average[time] << " totals " << OutcomeTotals[r] << 
+          //     " derivs " << derivMatrix[time]  << " " << derivMatrix[time + ntimes] << " " << derivMatrix[time + 2*ntimes] << " " << derivMatrix[time + 3*ntimes]  << 
+          //       " denom " << denom[time]  << "\n";
         } 
 
         double dif = 0; 
@@ -455,7 +488,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             for (R_xlen_t  r = time_index_exit;  r > time_index_entry ; r--)
               denom_private[r] += riskdiff; 
             
-            if (Outcomes[rowobs] > 0 )
+            if (Outcomes[rowobs]*weights[rowobs] > 0 )
             {
               newlk_private += xbdif * weights[rowobs];
               efron_wt_private[time_index_exit] += riskdiff;
@@ -479,7 +512,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
     if (recurrent == 1)
     {
       newlk_private = 0.0;
-#pragma omp parallel for default(none)  reduction(+:newlk_private,denom_private[:ntimes],efron_wt_private[:ntimes]) shared(maxid, gdiagfrail, idn, idstart, idend, newlk, OutcomeTotalTimes,OutcomeTotals, denom, efron_wt, wt_average, theta, frailty, frailty_mean, nu, step, derivMatrix,  coval, weights, Outcomes, ntimes, obs, timein, timeout, zbeta, nvar)
+#pragma omp parallel for default(none)  reduction(+:newlk_private,denom_private[:ntimes],efron_wt_private[:ntimes]) shared(eventtimesN, maxid, gdiagfrail, idn, idstart, idend, newlk, OutcomeTotalTimes,OutcomeTotals, denom, efron_wt, wt_average, theta, frailty, frailty_mean, nu, step, derivMatrix,  coval, weights, Outcomes, ntimes, obs, timein, timeout, zbeta, nvar)
       for (R_xlen_t  i = 0; i < maxid ; i++) 
       {
         double gdiag =  -gdiagfrail[i];
@@ -498,11 +531,11 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
           
           for (R_xlen_t  r = time_index_exit ;  r > time_index_entry ; r--) derivMatrix_private[r] += risk; // keep int for calculations of indices then cast
           
-          if (Outcomes[rowobs] > 0) derivMatrix_private[ntimes +  time_index_exit] += risk ;
+          if (Outcomes[rowobs]*weights[rowobs] > 0) derivMatrix_private[ntimes +  time_index_exit] += risk ;
           
         }
         
-        R_xlen_t  exittimesN = OutcomeTotalTimes.size() -1;
+        R_xlen_t  exittimesN = eventtimesN -1;
         
         for(R_xlen_t  r = exittimesN ; r >=0 ; r--)
         {
@@ -567,7 +600,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
           for (R_xlen_t  r = time_index_exit;  r > time_index_entry ; r--)
             denom_private[r] += riskdiff; // need to update exp(xb1 + xb2 + ) + exp(x2b1 + x2b2 +)
           
-          if (Outcomes[rowobs] > 0 )
+          if (Outcomes[rowobs]*weights[rowobs] > 0 )
           {
             newlk_private += dif * weights[rowobs];
             efron_wt_private[time_index_exit] += riskdiff;
@@ -585,7 +618,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
     newlk += d2_sum_private;
     d2_sum_private =0;
     
-    for(R_xlen_t  r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--)
+    for(R_xlen_t  r = eventtimesN -1 ; r >=0 ; r--)
     {
       R_xlen_t   time = OutcomeTotalTimes[r] - 1;
       for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
@@ -883,7 +916,7 @@ if (recurrent == 1)
 }
 
 
-R_xlen_t  timesN =  OutcomeTotals.size() -1;
+R_xlen_t  timesN =  eventtimesN -1;
 for (R_xlen_t  ir = 0; ir < ntimes; ir++)
   basehaz[ir] = 0.0;
 #pragma omp parallel for default(none) shared(timesN,wt_average, OutcomeTotals, OutcomeTotalTimes, denom, efron_wt, basehaz)
@@ -951,7 +984,8 @@ delete[] zbeta ;
 delete[] step ;
 delete[] gdiagbeta ;
 delete[] gdiagfrail;
-
+delete[] OutcomeTotals;
+delete[] OutcomeTotalTimes;
 Rcout << " Freed\n " ;
 
  }
