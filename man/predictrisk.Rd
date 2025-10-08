@@ -31,7 +31,7 @@ same length as coval. The maximum value is the length of timein and timeout.}
 \item{coval_in}{A double vector of each covariate value sorted first by order
 of the covariates then by time then by patient and to be included in model.
 Of the same longth as obs_in.
-coval_in\link{i} ~ timein_in[obs_in\link{i}], timeout_in[obs_in\link{i}], Outcomes_in[obs_in\link{i}],}
+\code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]}, \code{Outcomes_in[obs_in[i]]},}
 
 \item{frailty_in}{A double vector of frailty estimates for each idsorted by id.}
 
@@ -42,7 +42,8 @@ Sorted by time out, time in, and patient id}
 
 \item{timeout_in}{An integer vector of the end time for each unique patient
 time row, so would be the time that a patient's corresponding outcome
-occurs. Of the same length as timein, timeout and outcomes. Sorted by time out, time in, and patient id}
+occurs. Only used to find maximum time out for survival prediction.
+Of the same length as timein, timeout and outcomes. Sorted by time out, time in, and patient id}
 
 \item{covstart_in}{An integer64 (from package bit64) vector of the start row for each covariate in coval}
 
@@ -51,7 +52,7 @@ occurs. Of the same length as timein, timeout and outcomes. Sorted by time out, 
 \item{idn_in}{An integer vector mapping unique patient IDs sorted by ID to the
 corresponding row in observations sorted by time out, time in, and patient id
 For id = i the corresponding rows in time_in, timeout_in and Outcomes_in
-are the rows listed between idn_in[idstart_in\link{i}]:idn_in[idend_in\link{i}]}
+are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]}}
 
 \item{idstart_in}{An integer vector of the start row for each unique patient ID in idn_in}
 
@@ -61,7 +62,7 @@ are the rows listed between idn_in[idstart_in\link{i}]:idn_in[idend_in\link{i}]}
 threads than available memory for copying data for each thread.}
 }
 \value{
-Numeric List with linear predictor and predicted cumulative risk.
+Numeric List with linear predictor and predicted survival.
 }
 \description{
 The purpose of this implementation is for fitting a Cox model
@@ -75,8 +76,16 @@ to providing a standard package binary for multiple systems.
 The Makevars file therefore contains the options for this.
 }
 \details{
-A function using the same data structure to calculate individual level cumulative risks
-at the observed times in using the fitted model coefficients and baseline hazards
+A function using the same data structure to calculate individual level linear predictors
+and survival at the observed times in using the fitted model coefficients and baseline hazards
+
+This function recalculates the individual time level linear predictors,
+and the survival probability for each person's time point if that covariate
+level was unchanged throughout the follow up.
+
+If time varying covariates are included then the linear predictor
+for each time point would need to be combined with the incremental
+change in cumulative baseline hazard to calculate the cumulative risk.
 
 The total number of observations*covariates is allowed to exceed the
 maximum integer size in R, so the indexing into covariates

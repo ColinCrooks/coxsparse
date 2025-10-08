@@ -344,8 +344,6 @@ profileCI <- profile_ci(beta_in = c(CoxRegListParallelbetaFrailty$Beta),
                          timein_in = timein ,
                          timeout_in = timeout ,
                          Outcomes_in = Outcomes ,
-                         OutcomeTotals_in = OutcomesTotalUnique ,
-                         OutcomeTotalTimes_in = OutcomesTotalTimes,
                         covstart_in = covstart,
                         covend_in = covend,
                         idn_in = idn,
@@ -443,7 +441,7 @@ bh <- as.data.table(basehaz(coxfrailpenal))[J(1:max(timeout)),hazard,on = 'time'
 bh[is.na(bh)]<- 0
 minbh <- min(bh[bh>0])
 bh[bh==0] <- minbh
-expect_equal(c(risk$Risk),
+expect_equal(c(risk$Survival),
 c(exp(-bh)^exp(coxfrailpenal$linear.predictors)),
 tolerance = 1e-2
 )

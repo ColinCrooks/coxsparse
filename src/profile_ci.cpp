@@ -48,7 +48,7 @@ using namespace Rcpp;
 //' @param coval_in A double vector of each covariate value sorted first by order 
 //' of the covariates then by time then by patient and to be included in model.
 //' Of the same longth as obs_in. 
-//' coval_in[i] ~ timein_in[obs_in[i]], timeout_in[obs_in[i]], Outcomes_in[obs_in[i]],  
+//' \code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]}, \code{Outcomes_in[obs_in[i]]},  
 //' @param weights_in A double vector of weights to be applied to each unique
 //' patient time point. Of the same length as timein, timeout and outcomes. 
 //' Sorted by time out, time in, and patient id. 
@@ -63,16 +63,12 @@ using namespace Rcpp;
 //' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the 
 //' corresponding unique patient time. Of the same length as timein, timeout and 
 //' weights. Sorted by time out, time in, and patient id 
-//' @param OutcomeTotals_in An integer vector of the total number of outcomes that
-//' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
-//' @param OutcomeTotalTimes_in An integer vector of each unique time point that
-//' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
 //' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
 //' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
 //' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 //' corresponding row in observations sorted by time out, time in, and patient id
 //' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
-//' are the rows listed between idn_in[idstart_in[i]]:idn_in[idend_in[i]] 
+//' are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]} 
 //' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
 //' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 //' @param lambda Penalty weight to include for ridge regression:-log(sqrt(lambda)) * nvar
@@ -96,8 +92,6 @@ using namespace Rcpp;
      IntegerVector timein_in ,
      IntegerVector timeout_in ,
      IntegerVector Outcomes_in ,
-     IntegerVector OutcomeTotals_in ,
-     IntegerVector OutcomeTotalTimes_in,
      NumericVector covstart_in,
      NumericVector covend_in,
      IntegerVector idn_in,
@@ -143,9 +137,11 @@ using namespace Rcpp;
 
    RcppParallel::RVector<double> weights(weights_in);
    
+  double* OutcomeCounts = new double[ntimes](); 
+
    RcppParallel::RVector<int> Outcomes(Outcomes_in);
-   RcppParallel::RVector<int> OutcomeTotals(OutcomeTotals_in);
-   RcppParallel::RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
+//   RcppParallel::RVector<int> OutcomeTotals(OutcomeTotals_in);
+//  RcppParallel::RVector<int> OutcomeTotalTimes(OutcomeTotalTimes_in);
 
    RcppParallel::RVector<int> timein(timein_in);
    RcppParallel::RVector<int> timeout(timeout_in);
@@ -160,6 +156,34 @@ using namespace Rcpp;
    RcppParallel::RVector<int> idstart(idstart_in);
    RcppParallel::RVector<int> idend(idend_in);
    
+/* Weights can mean than some events are not counted, so need to recount event totals */  
+for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
+{
+      R_xlen_t  time_index_exit = timeout[rowobs] - 1;
+      if ( Outcomes[rowobs]*weights[rowobs] > 0 )
+      OutcomeCounts[time_index_exit] = OutcomeCounts[time_index_exit] + 1;
+}
+
+int64_t eventtimesN = 0;
+for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
+  if( OutcomeCounts[t] > 0)  eventtimesN = eventtimesN + 1;
+
+double* OutcomeTotals = new double[eventtimesN]();
+int64_t* OutcomeTotalTimes = new int64_t[eventtimesN]();
+
+R_xlen_t i = 0;
+for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
+{
+  if (OutcomeCounts[t] > 0) {
+    OutcomeTotals[i] = OutcomeCounts[t];
+    OutcomeTotalTimes[i] = t + 1;
+    i++;
+  }
+  
+}
+
+delete[] OutcomeCounts;
+
    double step = 1/pow(10,decimals);
    double  d2sum = 0.0;
    
@@ -225,7 +249,7 @@ using namespace Rcpp;
   }
 }
 
-  for(R_xlen_t r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
+  for(R_xlen_t r = eventtimesN -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
    /* Cumulative sums that do not depend on the specific covariate update*/
    for (R_xlen_t  i = 0; i < nvar; i++) // 
@@ -288,7 +312,7 @@ newlk += newlk_private;
 
 
 
-for(R_xlen_t r = OutcomeTotalTimes.size() - 1 ; r >=0 ; r--)
+for(R_xlen_t r = eventtimesN - 1 ; r >=0 ; r--)
 {
   for (R_xlen_t k = 0; k < OutcomeTotals[r]; k++)
   {
@@ -386,7 +410,7 @@ for (R_xlen_t i = 0; i < nvar; i++)
 
 updatelk -= updatelk_private;
 
-      for(R_xlen_t r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--)
+      for(R_xlen_t r = eventtimesN -1 ; r >=0 ; r--)
       {
         R_xlen_t time = OutcomeTotalTimes[r] - 1;
         for (R_xlen_t k = 0; k < OutcomeTotals[r]; k++)
@@ -476,7 +500,7 @@ updatelk -= updatelk_private;
 
 updatelk -= updatelk_private;
 
-for(R_xlen_t r = OutcomeTotalTimes.size() -1 ; r >=0 ; r--)
+for(R_xlen_t r = eventtimesN -1 ; r >=0 ; r--)
 {
   for (R_xlen_t k = 0; k < OutcomeTotals[r]; k++)
   {

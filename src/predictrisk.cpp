@@ -20,9 +20,17 @@ using namespace Rcpp;
 //' The Makevars file therefore contains the options for this.
 //'
 //' @details
-//' A function using the same data structure to calculate individual level cumulative risks
-//' at the observed times in using the fitted model coefficients and baseline hazards
+//' A function using the same data structure to calculate individual level linear predictors
+//' and survival at the observed times in using the fitted model coefficients and baseline hazards
 //' 
+//' This function recalculates the individual time level linear predictors,
+//' and the survival probability for each person's time point if that covariate
+//' level was unchanged throughout the follow up.
+//'
+//' If time varying covariates are included then the linear predictor
+//' for each time point would need to be combined with the incremental 
+//' change in cumulative baseline hazard to calculate the cumulative risk.
+//'
 //' The total number of observations*covariates is allowed to exceed the 
 //' maximum integer size in R, so the indexing into covariates
 //' needs to use integer64 vectors as defined in the bit64 package,
@@ -48,7 +56,7 @@ using namespace Rcpp;
 //' @param coval_in A double vector of each covariate value sorted first by order 
 //' of the covariates then by time then by patient and to be included in model.
 //' Of the same longth as obs_in. 
-//' coval_in[i] ~ timein_in[obs_in[i]], timeout_in[obs_in[i]], Outcomes_in[obs_in[i]],  
+//' \code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]}, \code{Outcomes_in[obs_in[i]]},  
 //' @param frailty_in A double vector of frailty estimates for each idsorted by id.
 //' @param  timein_in An integer vector of the start time for each unique patient 
 //' time row, so would be the time that a patient's corresponding
@@ -56,18 +64,19 @@ using namespace Rcpp;
 //' Sorted by time out, time in, and patient id
 //' @param timeout_in An integer vector of the end time for each unique patient
 //' time row, so would be the time that a patient's corresponding outcome
-//' occurs. Of the same length as timein, timeout and outcomes. Sorted by time out, time in, and patient id
+//' occurs. Only used to find maximum time out for survival prediction.
+//' Of the same length as timein, timeout and outcomes. Sorted by time out, time in, and patient id
 //' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
 //' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
 //' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 //' corresponding row in observations sorted by time out, time in, and patient id
 //' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
-//' are the rows listed between idn_in[idstart_in[i]]:idn_in[idend_in[i]] 
+//' are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]} 
 //' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
 //' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 //' @param threadn Number of threads to be used - caution as will crash if specify more
 //' threads than available memory for copying data for each thread.
-//' @return Numeric List with linear predictor and predicted cumulative risk.
+//' @return Numeric List with linear predictor and predicted survival.
 //'
 //' @export
 // [[Rcpp::export]]
@@ -103,10 +112,10 @@ R_xlen_t ntimes = max(timeout_in);
 bool recurrent = maxid > 0;
 
 Rcpp::DoubleVector  zbeta_r(maxobs);
-Rcpp::DoubleVector  risk_r(maxobs);
+Rcpp::DoubleVector  surv_r(maxobs);
 
 RcppParallel::RVector<double> zbeta(zbeta_r);
-RcppParallel::RVector<double> risk(risk_r);
+RcppParallel::RVector<double> surv(surv_r);
 
 /* Wrap all R objects to make thread safe for read and writing  */
 RcppParallel::RVector<double> beta(beta_in);
@@ -168,7 +177,7 @@ if (recurrent == 1)
 }
 
 /* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
-#pragma omp parallel  default(none) shared( zbeta, maxobs, timein,risk, cumhaz, min_cumhaz)
+#pragma omp parallel  default(none) shared( zbeta, maxobs, timein,surv, cumhaz, min_cumhaz)
 {
   #pragma omp for
   for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
@@ -180,10 +189,10 @@ if (recurrent == 1)
     double zbeta_temp = zbeta[rowobs] >22 ? 22 : zbeta[rowobs];
     zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
     zbeta[rowobs] = zbeta_temp;
-    risk[rowobs] = pow(exp(-tempch),exp(zbeta_temp));
+    surv[rowobs] = pow(exp(-tempch),exp(zbeta_temp));
   }  
 }
 
 return List::create(_["xb"] = zbeta,
-                    _["Risk"] = risk);
+                    _["Survival"] = surv);
 }

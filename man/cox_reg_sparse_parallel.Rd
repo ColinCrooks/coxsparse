@@ -54,7 +54,7 @@ same length as coval. The maximum value is the length of timein and timeout.}
 \item{coval_in}{A double vector of each covariate value sorted first by order
 of the covariates then by time then by patient and to be included in model.
 Of the same longth as obs_in.
-coval_in\link{i} ~ timein_in[obs_in\link{i}], timeout_in[obs_in\link{i}], Outcomes_in[obs_in\link{i}],}
+\code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]}, \code{Outcomes_in[obs_in[i]]},}
 
 \item{weights_in}{A double vector of weights to be applied to each unique
 patient time point. Of the same length as timein, timeout and outcomes.
@@ -81,7 +81,7 @@ Uses}
 \item{idn_in}{An integer vector mapping unique patient IDs sorted by ID to the
 corresponding row in observations sorted by time out, time in, and patient id
 For id = i the corresponding rows in time_in, timeout_in and Outcomes_in
-are the rows listed between idn_in[idstart_in\link{i}]:idn_in[idend_in\link{i}]}
+are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]}}
 
 \item{idstart_in}{An integer vector of the start row for each unique patient ID in idn_in}
 

@@ -61,7 +61,7 @@
 #' @param coval_in A double vector of each covariate value sorted first by order 
 #' of the covariates then by time then by patient and to be included in model.
 #' Of the same longth as obs_in. 
-#' coval_in[i] ~ timein_in[obs_in[i]], timeout_in[obs_in[i]], Outcomes_in[obs_in[i]],  
+#' \code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]}, \code{Outcomes_in[obs_in[i]]},  
 #' @param weights_in A double vector of weights to be applied to each unique
 #' patient time point. Of the same length as timein, timeout and outcomes. 
 #' Sorted by time out, time in, and patient id. 
@@ -81,7 +81,7 @@
 #' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 #' corresponding row in observations sorted by time out, time in, and patient id
 #' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
-#' are the rows listed between idn_in[idstart_in[i]]:idn_in[idend_in[i]] 
+#' are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]} 
 #' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
 #' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 #' @param lambda Penalty weight to include for ridge regression: -log(sqrt(lambda)) * nvar
@@ -111,9 +111,17 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' The Makevars file therefore contains the options for this.
 #'
 #' @details
-#' A function using the same data structure to calculate individual level cumulative risks
-#' at the observed times in using the fitted model coefficients and baseline hazards
+#' A function using the same data structure to calculate individual level linear predictors
+#' and survival at the observed times in using the fitted model coefficients and baseline hazards
 #' 
+#' This function recalculates the individual time level linear predictors,
+#' and the survival probability for each person's time point if that covariate
+#' level was unchanged throughout the follow up.
+#'
+#' If time varying covariates are included then the linear predictor
+#' for each time point would need to be combined with the incremental 
+#' change in cumulative baseline hazard to calculate the cumulative risk.
+#'
 #' The total number of observations*covariates is allowed to exceed the 
 #' maximum integer size in R, so the indexing into covariates
 #' needs to use integer64 vectors as defined in the bit64 package,
@@ -139,7 +147,7 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' @param coval_in A double vector of each covariate value sorted first by order 
 #' of the covariates then by time then by patient and to be included in model.
 #' Of the same longth as obs_in. 
-#' coval_in[i] ~ timein_in[obs_in[i]], timeout_in[obs_in[i]], Outcomes_in[obs_in[i]],  
+#' \code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]}, \code{Outcomes_in[obs_in[i]]},  
 #' @param frailty_in A double vector of frailty estimates for each idsorted by id.
 #' @param  timein_in An integer vector of the start time for each unique patient 
 #' time row, so would be the time that a patient's corresponding
@@ -147,18 +155,19 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' Sorted by time out, time in, and patient id
 #' @param timeout_in An integer vector of the end time for each unique patient
 #' time row, so would be the time that a patient's corresponding outcome
-#' occurs. Of the same length as timein, timeout and outcomes. Sorted by time out, time in, and patient id
+#' occurs. Only used to find maximum time out for survival prediction.
+#' Of the same length as timein, timeout and outcomes. Sorted by time out, time in, and patient id
 #' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
 #' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
 #' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 #' corresponding row in observations sorted by time out, time in, and patient id
 #' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
-#' are the rows listed between idn_in[idstart_in[i]]:idn_in[idend_in[i]] 
+#' are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]} 
 #' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
 #' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 #' @param threadn Number of threads to be used - caution as will crash if specify more
 #' threads than available memory for copying data for each thread.
-#' @return Numeric List with linear predictor and predicted cumulative risk.
+#' @return Numeric List with linear predictor and predicted survival.
 #'
 #' @export
 predictrisk <- function(beta_in, obs_in, coval_in, frailty_in, timein_in, timeout_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, cumhaz_in, threadn) {
@@ -208,7 +217,7 @@ predictrisk <- function(beta_in, obs_in, coval_in, frailty_in, timein_in, timeou
 #' @param coval_in A double vector of each covariate value sorted first by order 
 #' of the covariates then by time then by patient and to be included in model.
 #' Of the same longth as obs_in. 
-#' coval_in[i] ~ timein_in[obs_in[i]], timeout_in[obs_in[i]], Outcomes_in[obs_in[i]],  
+#' \code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]}, \code{Outcomes_in[obs_in[i]]},  
 #' @param weights_in A double vector of weights to be applied to each unique
 #' patient time point. Of the same length as timein, timeout and outcomes. 
 #' Sorted by time out, time in, and patient id. 
@@ -223,16 +232,12 @@ predictrisk <- function(beta_in, obs_in, coval_in, frailty_in, timein_in, timeou
 #' @param Outcomes_in An integer vector of 0 (censored) or 1 (outcome) for the 
 #' corresponding unique patient time. Of the same length as timein, timeout and 
 #' weights. Sorted by time out, time in, and patient id 
-#' @param OutcomeTotals_in An integer vector of the total number of outcomes that
-#' occur at each unique time point. Length is the number of unique times in cohort. Sorted by time
-#' @param OutcomeTotalTimes_in An integer vector of each unique time point that
-#' outcome events are observed in the cohort. Same length as OutcomeTotals. Sorted by time
 #' @param covstart_in An integer64 (from package bit64) vector of the start row for each covariate in coval 
 #' @param covend_in An integer64 (from package bit64) vector of the end row for each covariate in coval
 #' @param idn_in An integer vector mapping unique patient IDs sorted by ID to the 
 #' corresponding row in observations sorted by time out, time in, and patient id
 #' For id = i the corresponding rows in time_in, timeout_in and Outcomes_in 
-#' are the rows listed between idn_in[idstart_in[i]]:idn_in[idend_in[i]] 
+#' are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]} 
 #' @param idstart_in An integer vector of the start row for each unique patient ID in idn_in
 #' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 #' @param lambda Penalty weight to include for ridge regression:-log(sqrt(lambda)) * nvar
@@ -246,8 +251,8 @@ predictrisk <- function(beta_in, obs_in, coval_in, frailty_in, timein_in, timeou
 #' @return Numeric matrix with nvar rows and lower and upper confidence intervals in 2 columns.
 #'
 #' @export
-profile_ci <- function(beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn) {
-    .Call('_coxsparse_profile_ci', PACKAGE = 'coxsparse', beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, OutcomeTotals_in, OutcomeTotalTimes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn)
+profile_ci <- function(beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn) {
+    .Call('_coxsparse_profile_ci', PACKAGE = 'coxsparse', beta_in, obs_in, coval_in, weights_in, frailty_in, timein_in, timeout_in, Outcomes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, lambda, theta_in, MSTEP_MAX_ITER, decimals, confint_width, threadn)
 }
 
 safelog <- function(x) {
