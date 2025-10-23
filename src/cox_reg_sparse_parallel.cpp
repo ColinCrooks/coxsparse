@@ -924,12 +924,13 @@ for (R_xlen_t  r =  timesN - 1; r >= 0; r--)
 {
   double basehaz_private = 0.0;
   R_xlen_t  time = OutcomeTotalTimes[r] - 1;
-  for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
-  {
-    double temp = (double)k
-    / (double)OutcomeTotals[r];
-    basehaz_private += wt_average[time]/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
-  }
+  basehaz_private += (wt_average[time]*static_cast<double>(OutcomeTotals[r]))/denom[time];
+  // for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
+  // {
+  //   double temp = (double)k
+  //   / (double)OutcomeTotals[r];
+  //   basehaz_private += wt_average[time]/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
+  // }
   if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
   
 #pragma omp atomic write
