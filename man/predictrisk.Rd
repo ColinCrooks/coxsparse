@@ -10,13 +10,14 @@ predictrisk(
   coval_in,
   frailty_in,
   timein_in,
+  weights_in,
   timeout_in,
+  Outcomes_in,
   covstart_in,
   covend_in,
   idn_in,
   idstart_in,
   idend_in,
-  cumhaz_in,
   threadn
 )
 }

@@ -421,27 +421,31 @@ expect_equal(c(t(CoxRegListParallelbetaFrailtypenal$Frailty))-unlist(CoxRegListP
              coxfrailpenal$frail,tolerance = 10-9)
 
 
+
+
 risk <- coxsparse::predictrisk(beta_in = c(CoxRegListParallelbetaFrailtypenal$Beta),
                         obs_in = obs,
                         coval_in = coval,
                         frailty_in = c(t(CoxRegListParallelbetaFrailtypenal$Frailty)),
                         timein_in = timein ,
-                        timeout_in = timeout ,
+                        weights_in = rep(1,length(weights)),
+                         timeout_in = timeout ,
+                        Outcomes_in = Outcomes,
                         covstart_in = covstart,
                         covend_in = covend,
                         idn_in = idn,
                         idstart_in = idstart,
                         idend_in = idend,
-                        cumhaz_in = CoxRegListParallelbetaFrailtypenal$cumhaz,
                         threadn = 32)
 
-expect_equal(coxfrailpenal$linear.predictors,risk$xb, tolerance = 1e-4)
+expect_equal(coxfrailpenal$linear.predictors - mean(coxfrailpenal$linear.predictors),risk$xb_centred, tolerance = 1e-4)
 
-bh <- as.data.table(basehaz(coxfrailpenal))[J(1:max(timeout)),hazard,on = 'time', roll = Inf, rollends = c(F,T)][timein]
+bh <- as.data.table(basehaz(coxfrailpenal, centered = F))[J(1:max(timeout)),hazard,on = 'time', roll = Inf, rollends = c(F,T)][timeout]
 bh[is.na(bh)]<- 0
 minbh <- min(bh[bh>0])
 bh[bh==0] <- minbh
-expect_equal(c(risk$Survival),
+expect_equal(exp(-c(risk$CumHaz_centred[timeout]))^exp(risk$xb_centred),
+           #  c(exp(-predict(coxfrailpenal,type = 'expected'))),
 c(exp(-bh)^exp(coxfrailpenal$linear.predictors)),
 tolerance = 1e-2
 )

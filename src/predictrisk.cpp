@@ -86,54 +86,109 @@ List predictrisk(
      DoubleVector coval_in,
      DoubleVector frailty_in,
      IntegerVector timein_in ,
+     DoubleVector  weights_in,
      IntegerVector timeout_in ,
+     IntegerVector Outcomes_in ,
      NumericVector covstart_in,
      NumericVector covend_in,
      IntegerVector idn_in,
      IntegerVector idstart_in,
      IntegerVector idend_in,
-     DoubleVector cumhaz_in,
      int threadn
  )
  {
    Rcpp::Rcout.precision(10);
    omp_set_dynamic(0);
-  // Explicitly disable dynamic teams
+   // Explicitly disable dynamic teams
    omp_set_num_threads(threadn);
+   
+   // Vectors from R index begin from 1. Need to convert to 0 index for C++and comparisons
+   
+   // Unique times but don't accumulate for time 0 as no events
+   
+   R_xlen_t maxobs = max(obs_in);
+   R_xlen_t nvar = covstart_in.length();
+   R_xlen_t maxid = idstart_in.length(); // Number of unique patients
+   R_xlen_t ntimes = max(timeout_in);
+   bool recurrent = maxid > 0;
+   
+   Rcpp::DoubleVector  zbeta_r(maxobs);
+   Rcpp::DoubleVector  surv_r(maxobs);
+   Rcpp::DoubleVector  basehaz_r(ntimes);
+   Rcpp::DoubleVector  cumhaz_r(ntimes);
+   
+   RcppParallel::RVector<double> zbeta(zbeta_r);
+   RcppParallel::RVector<double> surv(surv_r);
+   
+   /* Wrap all R objects to make thread safe for read and writing  */
+   RcppParallel::RVector<double> beta(beta_in);
+   RcppParallel::RVector<double> frailty(frailty_in);
+   RcppParallel::RVector<double> cumhaz(cumhaz_r);
+   RcppParallel::RVector<double> basehaz(basehaz_r);
+   
+   RcppParallel::RVector<int> timein(timein_in);
+   RcppParallel::RVector<int> timeout(timeout_in);
+   
+   RcppParallel::RVector<double> coval(coval_in);   
+   RcppParallel::RVector<int> obs(obs_in); 
+   
+   RcppParallel::RVector<int> Outcomes(Outcomes_in);
+   
+   std::vector<int64_t> covstart = Rcpp::fromInteger64(covstart_in); 
+   std::vector<int64_t> covend = Rcpp::fromInteger64(covend_in); 
+   
+   RcppParallel::RVector<int> idn(idn_in);
+   RcppParallel::RVector<int> idstart(idstart_in);
+   RcppParallel::RVector<int> idend(idend_in);
+   double* OutcomeCounts = new double[ntimes]() ; 
+   double* wt_average = new double[ntimes]() ;
+   RcppParallel::RVector<double> weights(weights_in);
+   
+   double* denom = new double[ntimes](); // default zero initialisation
+   double* denom_private = new double[ntimes]();
+   
+   
+   
+   /* Weights can mean than some events are not counted, so need to recount event totals */  
+   for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
+   {
+     R_xlen_t  time_index_exit = timeout[rowobs] - 1;
+     if ( Outcomes[rowobs]*weights[rowobs] > 0 )
+       OutcomeCounts[time_index_exit] = OutcomeCounts[time_index_exit] + 1;
+   }
+   
+   int64_t eventtimesN = 0;
+   for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
+     if( OutcomeCounts[t] > 0)  eventtimesN = eventtimesN + 1;
+     
+     double* OutcomeTotals = new double[eventtimesN]();
+     int64_t* OutcomeTotalTimes = new int64_t[eventtimesN]();
+     
+     R_xlen_t i = 0;
+     for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
+     {
+       if (OutcomeCounts[t] > 0) {
+         OutcomeTotals[i] = OutcomeCounts[t];
+         OutcomeTotalTimes[i] = t + 1;
+         i++;
+       }
+       
+     }
+     
+     delete[] OutcomeCounts;
+     
+#pragma omp parallel default(none) reduction(+:wt_average[:ntimes]) shared(timeout,  weights,  Outcomes ,ntimes, maxobs)
+{  
+#pragma omp for
+  for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
+  {
+    R_xlen_t  time_index_exit = timeout[rowobs] - 1;
+    if (Outcomes[rowobs]*weights[rowobs] > 0 )  wt_average[time_index_exit] += weights[rowobs];
+  }
+}
+//Rcout << "averaging deaths at each time point, ";
+for(R_xlen_t  r = eventtimesN -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
-     // Vectors from R index begin from 1. Need to convert to 0 index for C++and comparisons
-
-    // Unique times but don't accumulate for time 0 as no events
-
-R_xlen_t maxobs = max(obs_in);
-R_xlen_t nvar = covstart_in.length();
-R_xlen_t maxid = idstart_in.length(); // Number of unique patients
-R_xlen_t ntimes = max(timeout_in);
-bool recurrent = maxid > 0;
-
-Rcpp::DoubleVector  zbeta_r(maxobs);
-Rcpp::DoubleVector  surv_r(maxobs);
-
-RcppParallel::RVector<double> zbeta(zbeta_r);
-RcppParallel::RVector<double> surv(surv_r);
-
-/* Wrap all R objects to make thread safe for read and writing  */
-RcppParallel::RVector<double> beta(beta_in);
-RcppParallel::RVector<double> frailty(frailty_in);
-RcppParallel::RVector<double> cumhaz(cumhaz_in);
-
-RcppParallel::RVector<int> timein(timein_in);
-RcppParallel::RVector<int> timeout(timeout_in);
-
-RcppParallel::RVector<double> coval(coval_in);   
-RcppParallel::RVector<int> obs(obs_in); 
-
-std::vector<int64_t> covstart = Rcpp::fromInteger64(covstart_in); 
-std::vector<int64_t> covend = Rcpp::fromInteger64(covend_in); 
-
-RcppParallel::RVector<int> idn(idn_in);
-RcppParallel::RVector<int> idstart(idstart_in);
-RcppParallel::RVector<int> idend(idend_in);
 
 double frailty_sum = 0.0;
 double frailty_mean = 0.0;
@@ -145,54 +200,135 @@ double min_cumhaz = std::numeric_limits<double>::infinity();
 for (R_xlen_t t = 0; t < ntimes; t++) min_cumhaz = (cumhaz[t] > 1e-6 && (cumhaz[t] < min_cumhaz)) ? cumhaz[t] : min_cumhaz;
 
 frailty_mean = safelog(frailty_sum / maxid);
+double zbeta_mean = 0.0;
 
 /* Cumulative sums that do not depend on the specific covariate update*/
-  for (R_xlen_t  i = 0; i < nvar; i++) // 
-  { /* per observation time calculations */
-      
-      double beta_local =  beta[i] ;
-      #pragma omp parallel  default(none)  shared(i, covstart, covend, maxobs, coval, beta_local,  obs, zbeta) 
-      {
-        #pragma omp for
-        for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i]; covi++)
-        {
-          R_xlen_t  rowobs =  obs[covi] - 1 ;
-          double covali =  coval[covi] ;
-          zbeta[rowobs] += beta_local * covali ; // each covariate occurs once in an observation time
-        }
-      }
+for (R_xlen_t  i = 0; i < nvar; i++) // 
+{ /* per observation time calculations */
+
+double beta_local =  beta[i] ;
+#pragma omp parallel  default(none) shared(i, covstart, covend, maxobs, coval, beta_local,  obs, zbeta) 
+{
+#pragma omp for
+  for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i]; covi++)
+  {
+    R_xlen_t  rowobs =  obs[covi] - 1 ;
+    double covali =  coval[covi] ;
+    zbeta[rowobs] += beta_local * covali ; // each covariate occurs once in an observation time
   }
+}
+}
 
 if (recurrent == 1)
 {
   //  Rcout << "summing zbeta with frailty, ";  
-  #pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty, frailty_mean) //reduction(+:zbeta[:maxobs])
+#pragma omp parallel for  default(none) shared(idstart, idend, idn , zbeta, maxid, frailty, frailty_mean) //reduction(+:zbeta[:maxobs])
   for (R_xlen_t  i = 0; i < maxid; i++) // +
-    { /* per observation time calculations */
-        for (R_xlen_t  idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
-      {
-        zbeta[idn[idi] - 1] += frailty[i] - frailty_mean ; // should be one frailty per person / observation
-      }
-    }
+  { /* per observation time calculations */
+for (R_xlen_t  idi = idstart[i] - 1; idi < idend[i] ; idi++) // iter over current covariates
+{
+  zbeta[idn[idi] - 1] += frailty[i] - frailty_mean ; // should be one frailty per person / observation
 }
+  }
+}
+
+#pragma omp parallel for  default(none) reduction(+:zbeta_mean) shared( zbeta, maxobs)
+for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++) 
+{
+  zbeta_mean += zbeta[rowobs];
+}
+
+zbeta_mean /= maxobs;
+
+#pragma omp parallel for  default(none) shared( zbeta, maxobs, zbeta_mean)
+for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++) 
+{
+  zbeta[rowobs] -= zbeta_mean;
+}
+
+
+#pragma omp parallel  default(none) reduction(+:denom[:ntimes])  shared(timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
+{
+#pragma omp for
+  for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
+  {
+    R_xlen_t  time_index_entry = timein[rowobs] - 1;  // Time starts at zero but no events at this time to calculate sums. Lowest value of -1 but not used to reference into any vectors
+    R_xlen_t  time_index_exit = timeout[rowobs] - 1;
+    
+    double zbeta_temp = zbeta[rowobs] >22 ? 22 : zbeta[rowobs];
+    zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
+    double risk = exp(zbeta_temp) * weights[rowobs];
+    zbeta[rowobs] = zbeta_temp;
+    //cumumlative sums for all patients
+    for (R_xlen_t  r = time_index_exit;  r > time_index_entry ; r--)
+      denom[r] += risk;
+    
+  }  
+}
+
+
+
+R_xlen_t  timesN =  eventtimesN -1;
+for (R_xlen_t  ir = 0; ir < ntimes; ir++)
+  basehaz[ir] = 0.0;
+#pragma omp parallel for default(none) shared(timesN,wt_average, OutcomeTotals, OutcomeTotalTimes, denom, basehaz)
+for (R_xlen_t  r =  timesN - 1; r >= 0; r--)
+{
+  double basehaz_private = 0.0;
+  R_xlen_t  time = OutcomeTotalTimes[r] - 1;
+  basehaz_private += (wt_average[time]*static_cast<double>(OutcomeTotals[r]))/denom[time];
+  // for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
+  // {
+  //   double temp = (double)k
+  //   / (double)OutcomeTotals[r];
+  //   basehaz_private += wt_average[time]/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
+  // }
+  if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
+  
+#pragma omp atomic write
+  basehaz[time] = basehaz_private; // should be thread safe as time unique per thread
+}
+
+Rcout << " Calculating cumulative baseline hazard..." ;
+
+/* Carry forward last value of basehazard */
+double last_value = 0.0;
+
+cumhaz[0] = basehaz[0] ;
+for (R_xlen_t  t = 0; t < ntimes; t++)
+{
+  if (t>0) cumhaz[t] = cumhaz[t-1] +  basehaz[t];
+  if (basehaz[t] == 0.0)
+  {
+    basehaz[t] = last_value;
+  } else 
+  {
+    last_value = basehaz[t];
+  }
+}
+
 
 /* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
 #pragma omp parallel  default(none) shared( zbeta, maxobs, timein,surv, cumhaz, min_cumhaz)
 {
-  #pragma omp for
+#pragma omp for
   for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
   {
     R_xlen_t  time_index_entry = timein[rowobs] - 1; // std vectors use unsigned can be negative though for time 0
     
     double tempch = (cumhaz[time_index_entry] == 0) ? min_cumhaz : cumhaz[time_index_entry];
-    
-    double zbeta_temp = zbeta[rowobs] >22 ? 22 : zbeta[rowobs];
-    zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
-    zbeta[rowobs] = zbeta_temp;
-    surv[rowobs] = pow(exp(-tempch),exp(zbeta_temp));
+    surv[rowobs] = pow(exp(-tempch),exp(zbeta[rowobs]));
   }  
 }
 
-return List::create(_["xb"] = zbeta,
-                    _["Survival"] = surv);
-}
+
+delete[] denom;
+delete[] denom_private;
+delete[] wt_average;  
+
+return List::create(_["xb_centred"] = zbeta,
+                    _["Survival"] = surv,
+                    _["BaseHaz_centred"] = basehaz,
+                    _["CumHaz_centred"] = cumhaz);
+ }
+ 

@@ -170,8 +170,8 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' @return Numeric List with linear predictor and predicted survival.
 #'
 #' @export
-predictrisk <- function(beta_in, obs_in, coval_in, frailty_in, timein_in, timeout_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, cumhaz_in, threadn) {
-    .Call('_coxsparse_predictrisk', PACKAGE = 'coxsparse', beta_in, obs_in, coval_in, frailty_in, timein_in, timeout_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, cumhaz_in, threadn)
+predictrisk <- function(beta_in, obs_in, coval_in, frailty_in, timein_in, weights_in, timeout_in, Outcomes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, threadn) {
+    .Call('_coxsparse_predictrisk', PACKAGE = 'coxsparse', beta_in, obs_in, coval_in, frailty_in, timein_in, weights_in, timeout_in, Outcomes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, threadn)
 }
 
 #' profile_ci
