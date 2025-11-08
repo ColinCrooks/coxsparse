@@ -41,6 +41,11 @@ time row, so would be the time that a patient's corresponding
 covariate value starts. Of the same length as timeout, and outcomes.
 Sorted by time out, time in, and patient id}
 
+\item{weights_in}{A double vector of weights to be applied to each unique
+patient time point when the model was fitted.
+Of the same length as timein, timeout and outcomes.
+Sorted by time out, time in, and patient id.}
+
 \item{timeout_in}{An integer vector of the end time for each unique patient
 time row, so would be the time that a patient's corresponding outcome
 occurs. Only used to find maximum time out for survival prediction.
@@ -63,7 +68,10 @@ are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]}}
 threads than available memory for copying data for each thread.}
 }
 \value{
-Numeric List with linear predictor and predicted survival.
+Numeric List with centred linear predictor,
+centred baseline hazard increments(zero if no events),
+cumulative hazard,
+and predicted survival.
 }
 \description{
 The purpose of this implementation is for fitting a Cox model
@@ -78,13 +86,13 @@ The Makevars file therefore contains the options for this.
 }
 \details{
 A function using the same data structure to calculate individual level linear predictors
-and survival at the observed times in using the fitted model coefficients and baseline hazards
+and survival at the observed event times using the centred fitted model coefficients
+and baseline hazards with efton weighting for ties.
 
-This function recalculates the individual time level linear predictors,
-and the survival probability for each person's time point if that covariate
-level was unchanged throughout the follow up.
-
-If time varying covariates are included then the linear predictor
+This function recalculates the individual time level linear predictors centred on the mean
+across all observed times, and the survival probability for each person's time point
+if that covariate level was unchanged throughout the follow up which might be meaningless;
+if time varying covariates are included then the linear predictor
 for each time point would need to be combined with the incremental
 change in cumulative baseline hazard to calculate the cumulative risk.
 

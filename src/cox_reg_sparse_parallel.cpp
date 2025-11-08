@@ -154,7 +154,6 @@ void cox_reg_sparse_parallel( List modeldata,
    double* efron_wt = new double[ntimes]();
    double* denom_private = new double[ntimes]();
    double* efron_wt_private = new double[ntimes]();
-   double* wt_average = new double[ntimes]();
    double* zbeta = new double[maxobs]();
 
    double* derivMatrix = new double[ntimes*4]();
@@ -162,7 +161,8 @@ void cox_reg_sparse_parallel( List modeldata,
    double* gdiagbeta = new double[nvar]();
    double* gdiagfrail = new double[maxid]();
 
-   double* OutcomeCounts = new double[ntimes](); 
+   double* OutcomeCounts = new double[ntimes]();
+   double* Wts_allEventtimes = new double[ntimes](); 
 
    /* Wrap all R objects to make thread safe for read and writing  */
    
@@ -208,25 +208,36 @@ void cox_reg_sparse_parallel( List modeldata,
   int done = 0;
 
 /* Weights can mean than some events are not counted, so need to recount event totals */  
-for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
-{
-      R_xlen_t  time_index_exit = timeout[rowobs] - 1;
-      if ( Outcomes[rowobs]*weights[rowobs] > 0 )
-      OutcomeCounts[time_index_exit] = OutcomeCounts[time_index_exit] + 1;
+#pragma omp parallel default(none) reduction(+:OutcomeCounts[:ntimes],Wts_allEventtimes[:ntimes]) shared(timeout,  weights,  Outcomes ,ntimes, maxobs)
+{  
+#pragma omp for
+  for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
+  {
+    R_xlen_t  time_index_exit = timeout[rowobs] - 1;
+    if ( Outcomes[rowobs]*weights[rowobs] > 0 ) 
+    {
+      OutcomeCounts[time_index_exit] += 1;
+      Wts_allEventtimes[time_index_exit] += weights[rowobs];
+    }
+  }
 }
 
+// Reduce outcome total counts to a vector at just the outcome times
 int64_t eventtimesN = 0;
 for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
   if( OutcomeCounts[t] > 0)  eventtimesN = eventtimesN + 1;
 
 double* OutcomeTotals = new double[eventtimesN]();
 int64_t* OutcomeTotalTimes = new int64_t[eventtimesN]();
+double* wt_average = new double[eventtimesN]();
+double* wt_totals = new double[eventtimesN]();
 
 R_xlen_t i = 0;
 for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
 {
   if (OutcomeCounts[t] > 0) {
     OutcomeTotals[i] = OutcomeCounts[t];
+    wt_totals[i] = Wts_allEventtimes[t];
     OutcomeTotalTimes[i] = t + 1;
     i++;
   }
@@ -234,12 +245,14 @@ for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
 }
 
 delete[] OutcomeCounts;
-
+delete[] Wts_allEventtimes;
 //for (R_xlen_t r = 0; r < eventtimesN; r++) Rcout << OutcomeTotals[r] <<", "<< OutcomeTotalTimes[r] <<std::endl;
+//Rcout << "averaging deaths at each time point, ";
+for(R_xlen_t  r = eventtimesN -1 ; r >=0 ; r--) wt_average[r] = (OutcomeTotals[r]>0 ? wt_totals[r]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
 //   Rcout << "counting numerators, ";
-   for (R_xlen_t  i = 0; i < nvar; i++)
-   { /* per observation time calculations */
+for (R_xlen_t  i = 0; i < nvar; i++)
+{ /* per observation time calculations */
    
    double gdiag_private = 0.0;
      
@@ -274,19 +287,6 @@ delete[] OutcomeCounts;
      }
    }
 
-//   Rcout << "summing deaths at each time point, ";
-
-#pragma omp parallel default(none) reduction(+:wt_average[:ntimes]) shared(timeout,  weights,  Outcomes ,ntimes, maxobs)
-{  
-#pragma omp for
-  for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
-  {
-    R_xlen_t  time_index_exit = timeout[rowobs] - 1;
-    if (Outcomes[rowobs]*weights[rowobs] > 0 )  wt_average[time_index_exit] += weights[rowobs];
-  }
-}
-//Rcout << "averaging deaths at each time point, ";
-for(R_xlen_t  r = eventtimesN -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
 /* Set up */
 newlk = 0.0;
@@ -419,8 +419,8 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             double d2 = denom[time] - (temp * efron_wt[time]); /* sum(denom) adjusted for tied deaths*/
 
             double temp2 = (derivMatrix[time] - (temp * derivMatrix[(2*ntimes) + time])) / d2;
-            gdiag += wt_average[time]*temp2; 
-            hdiag += wt_average[time]*(((derivMatrix[ntimes + time] - (temp * derivMatrix[(3*ntimes) + time])) / d2) -
+            gdiag += wt_average[r]*temp2; 
+            hdiag += wt_average[r]*(((derivMatrix[ntimes + time] - (temp * derivMatrix[(3*ntimes) + time])) / d2) -
               (temp2 * temp2)) ;
           }
           // if(  OutcomeTotals[r] >0 && r > exittimesN-1000) Rcout << "Time " << time << " gdiag " << gdiag<< " hdiag " <<
@@ -550,8 +550,8 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             double d2 = denom[time] - (temp * efron_wt[time]); /* sum(denom) adjusted for tied deaths*/
             double temp2 = (derivMatrix_private[time] - (temp * derivMatrix_private[ntimes + time])) / d2;
 
-            gdiag += wt_average[time]*temp2; 
-            hdiag += wt_average[time]*(temp2 * (1 - temp2)) ; 
+            gdiag += wt_average[r]*temp2; 
+            hdiag += wt_average[r]*(temp2 * (1 - temp2)) ; 
           }
         } 
         
@@ -627,8 +627,8 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
         / (double)OutcomeTotals[r];
         double d2 = denom[time] - (temp * efron_wt[time]); /* sum(denom) adjusted for tied deaths*/
         
-        d2_sum_private += wt_average[time]*safelog(d2); // track this sum to remove from newlk at start of next iteration
-        newlk -= wt_average[time]*safelog(d2); 
+        d2_sum_private += wt_average[r]*safelog(d2); // track this sum to remove from newlk at start of next iteration
+        newlk -= wt_average[r]*safelog(d2); 
       }
     }
     
@@ -919,41 +919,28 @@ if (recurrent == 1)
 R_xlen_t  timesN =  eventtimesN -1;
 for (R_xlen_t  ir = 0; ir < ntimes; ir++)
   basehaz[ir] = 0.0;
-#pragma omp parallel for default(none) shared(timesN,wt_average, OutcomeTotals, OutcomeTotalTimes, denom, efron_wt, basehaz)
+#pragma omp parallel for default(none) shared(timesN,wt_totals, OutcomeTotals, OutcomeTotalTimes, denom,efron_wt, basehaz)
 for (R_xlen_t  r =  timesN - 1; r >= 0; r--)
 {
   double basehaz_private = 0.0;
   R_xlen_t  time = OutcomeTotalTimes[r] - 1;
-  basehaz_private += (wt_average[time]*static_cast<double>(OutcomeTotals[r]))/denom[time];
-  // for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
-  // {
-  //   double temp = (double)k
-  //   / (double)OutcomeTotals[r];
-  //   basehaz_private += wt_average[time]/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
-  // }
-  if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
-  
+  // basehaz_private += (static_cast<double>(OutcomeTotals[r]))/denom[time];
+  for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
+  {
+    double temp = 1/(denom[time] - (efron_wt[time] * (double)k
+                                      / (double)OutcomeTotals[r] ));
+    basehaz_private += temp/(double)OutcomeTotals[r] ; /* sum(denom) adjusted for tied deaths*/
+  }
 #pragma omp atomic write
-  basehaz[time] = basehaz_private; // should be thread safe as time unique per thread
+  basehaz[time] = basehaz_private*wt_totals[r]; // should be thread safe as time unique per thread
 }
 
 Rcout << " Calculating cumulative baseline hazard..." ;
 
-/* Carry forward last value of basehazard */
-double last_value = 0.0;
-
 cumhaz[0] = basehaz[0] ;
-for (R_xlen_t  t = 0; t < ntimes; t++)
-{
-  if (t>0) cumhaz[t] = cumhaz[t-1] +  basehaz[t];
-  if (basehaz[t] == 0.0)
-  {
-    basehaz[t] = last_value;
-  } else 
-  {
-    last_value = basehaz[t];
-  }
-}
+for (R_xlen_t  t = 1; t < ntimes; t++)
+   cumhaz[t] = cumhaz[t-1] +  basehaz[t];
+
 
 ModelSummary[0] = loglik;
 ModelSummary[1] = lik_correction;
@@ -976,7 +963,8 @@ delete[] denom;
 delete[] efron_wt;
 delete[] denom_private;
 delete[] efron_wt_private;
-delete[] wt_average;  
+delete[] wt_average;
+delete[] wt_totals;  
 delete[] derivMatrix;
 delete[] frailty_group_events ;
 delete[] theta_history;

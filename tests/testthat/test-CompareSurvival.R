@@ -440,7 +440,7 @@ risk <- coxsparse::predictrisk(beta_in = c(CoxRegListParallelbetaFrailtypenal$Be
 
 expect_equal(coxfrailpenal$linear.predictors - mean(coxfrailpenal$linear.predictors),risk$xb_centred, tolerance = 1e-4)
 
-bh <- as.data.table(basehaz(coxfrailpenal, centered = F))[J(1:max(timeout)),hazard,on = 'time', roll = Inf, rollends = c(F,T)][timeout]
+bh <- as.data.table(basehaz(coxfrailpenal, centered = T))[J(1:max(timeout)),hazard,on = 'time', roll = Inf, rollends = c(F,T)][timeout]
 bh[is.na(bh)]<- 0
 minbh <- min(bh[bh>0])
 bh[bh==0] <- minbh

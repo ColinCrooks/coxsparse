@@ -21,13 +21,13 @@ using namespace Rcpp;
 //'
 //' @details
 //' A function using the same data structure to calculate individual level linear predictors
-//' and survival at the observed times in using the fitted model coefficients and baseline hazards
+//' and survival at the observed event times using the centred fitted model coefficients 
+//' and baseline hazards with efton weighting for ties.
 //' 
-//' This function recalculates the individual time level linear predictors,
-//' and the survival probability for each person's time point if that covariate
-//' level was unchanged throughout the follow up.
-//'
-//' If time varying covariates are included then the linear predictor
+//' This function recalculates the individual time level linear predictors centred on the mean 
+//' across all observed times, and the survival probability for each person's time point 
+//' if that covariate level was unchanged throughout the follow up which might be meaningless;
+//' if time varying covariates are included then the linear predictor
 //' for each time point would need to be combined with the incremental 
 //' change in cumulative baseline hazard to calculate the cumulative risk.
 //'
@@ -62,6 +62,10 @@ using namespace Rcpp;
 //' time row, so would be the time that a patient's corresponding
 //' covariate value starts. Of the same length as timeout, and outcomes. 
 //' Sorted by time out, time in, and patient id
+//' @param weights_in A double vector of weights to be applied to each unique
+//' patient time point when the model was fitted. 
+//' Of the same length as timein, timeout and outcomes. 
+//' Sorted by time out, time in, and patient id. 
 //' @param timeout_in An integer vector of the end time for each unique patient
 //' time row, so would be the time that a patient's corresponding outcome
 //' occurs. Only used to find maximum time out for survival prediction.
@@ -76,7 +80,10 @@ using namespace Rcpp;
 //' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 //' @param threadn Number of threads to be used - caution as will crash if specify more
 //' threads than available memory for copying data for each thread.
-//' @return Numeric List with linear predictor and predicted survival.
+//' @return Numeric List with centred linear predictor, 
+//' centred baseline hazard increments(zero if no events),
+//' cumulative hazard, 
+//' and predicted survival.
 //'
 //' @export
 // [[Rcpp::export]]
@@ -116,7 +123,7 @@ List predictrisk(
    Rcpp::DoubleVector  surv_r(maxobs);
    Rcpp::DoubleVector  basehaz_r(ntimes);
    Rcpp::DoubleVector  cumhaz_r(ntimes);
-   
+
    RcppParallel::RVector<double> zbeta(zbeta_r);
    RcppParallel::RVector<double> surv(surv_r);
    
@@ -141,14 +148,13 @@ List predictrisk(
    RcppParallel::RVector<int> idstart(idstart_in);
    RcppParallel::RVector<int> idend(idend_in);
    double* OutcomeCounts = new double[ntimes]() ; 
-   double* wt_average = new double[ntimes]() ;
+   double* wt_totals = new double[ntimes]() ;
+   
    RcppParallel::RVector<double> weights(weights_in);
    
    double* denom = new double[ntimes](); // default zero initialisation
-   double* denom_private = new double[ntimes]();
-   
-   
-   
+   double* efron_wt = new double[ntimes]();
+
    /* Weights can mean than some events are not counted, so need to recount event totals */  
    for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
    {
@@ -161,8 +167,8 @@ List predictrisk(
    for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
      if( OutcomeCounts[t] > 0)  eventtimesN = eventtimesN + 1;
      
-     double* OutcomeTotals = new double[eventtimesN]();
-     int64_t* OutcomeTotalTimes = new int64_t[eventtimesN]();
+   double* OutcomeTotals = new double[eventtimesN]();
+   int64_t* OutcomeTotalTimes = new int64_t[eventtimesN]();
      
      R_xlen_t i = 0;
      for (R_xlen_t  t = 0; t < ntimes ; t++) // iter over times
@@ -172,22 +178,22 @@ List predictrisk(
          OutcomeTotalTimes[i] = t + 1;
          i++;
        }
-       
+       wt_totals[t] = 0.0;
      }
      
      delete[] OutcomeCounts;
      
-#pragma omp parallel default(none) reduction(+:wt_average[:ntimes]) shared(timeout,  weights,  Outcomes ,ntimes, maxobs)
+#pragma omp parallel default(none) reduction(+:wt_totals[:ntimes]) shared(timeout,  weights,  Outcomes ,ntimes, maxobs)
 {  
 #pragma omp for
   for (R_xlen_t  rowobs = 0; rowobs < maxobs ; rowobs++) // iter over current covariates
   {
     R_xlen_t  time_index_exit = timeout[rowobs] - 1;
-    if (Outcomes[rowobs]*weights[rowobs] > 0 )  wt_average[time_index_exit] += weights[rowobs];
+    if (Outcomes[rowobs]*weights[rowobs] > 0 )  wt_totals[time_index_exit] += weights[rowobs];
   }
 }
 //Rcout << "averaging deaths at each time point, ";
-for(R_xlen_t  r = eventtimesN -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_average[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
+//for(R_xlen_t  r = eventtimesN -1 ; r >=0 ; r--) wt_average[OutcomeTotalTimes[r] - 1] = (OutcomeTotals[r]>0 ? wt_totals[OutcomeTotalTimes[r] - 1]/static_cast<double>(OutcomeTotals[r]) : 0.0);
 
 
 double frailty_sum = 0.0;
@@ -247,7 +253,7 @@ for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
 }
 
 
-#pragma omp parallel  default(none) reduction(+:denom[:ntimes])  shared(timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
+#pragma omp parallel  default(none) reduction(+:denom[:ntimes], efron_wt[:ntimes])  shared(timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
 {
 #pragma omp for
   for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
@@ -262,6 +268,11 @@ for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
     //cumumlative sums for all patients
     for (R_xlen_t  r = time_index_exit;  r > time_index_entry ; r--)
       denom[r] += risk;
+    if (Outcomes[rowobs]*weights[rowobs] > 0 )
+    {
+      /*cumumlative sums for event patients */
+      efron_wt[time_index_exit] += risk;
+    }
     
   }  
 }
@@ -271,41 +282,27 @@ for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
 R_xlen_t  timesN =  eventtimesN -1;
 for (R_xlen_t  ir = 0; ir < ntimes; ir++)
   basehaz[ir] = 0.0;
-#pragma omp parallel for default(none) shared(timesN,wt_average, OutcomeTotals, OutcomeTotalTimes, denom, basehaz)
+#pragma omp parallel for default(none) shared(timesN,wt_totals, OutcomeTotals, OutcomeTotalTimes, denom,efron_wt, basehaz)
 for (R_xlen_t  r =  timesN - 1; r >= 0; r--)
 {
   double basehaz_private = 0.0;
   R_xlen_t  time = OutcomeTotalTimes[r] - 1;
-  basehaz_private += (wt_average[time]*static_cast<double>(OutcomeTotals[r]))/denom[time];
-  // for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
-  // {
-  //   double temp = (double)k
-  //   / (double)OutcomeTotals[r];
-  //   basehaz_private += wt_average[time]/(denom[time] - (temp * efron_wt[time])); /* sum(denom) adjusted for tied deaths*/
-  // }
-  if (std::isnan(basehaz_private) || basehaz_private < 1e-100)  basehaz_private = 1e-100; //log(basehaz) required so a minimum measureable hazard is required to avoobs NaN errors.
-  
+ // basehaz_private += (static_cast<double>(OutcomeTotals[r]))/denom[time];
+  for (R_xlen_t  k = 0; k < OutcomeTotals[r]; k++)
+  {
+    double temp = 1/(denom[time] - (efron_wt[time] * (double)k
+                                      / (double)OutcomeTotals[r] ));
+    basehaz_private += temp/(double)OutcomeTotals[r] ; /* sum(denom) adjusted for tied deaths*/
+  }
 #pragma omp atomic write
-  basehaz[time] = basehaz_private; // should be thread safe as time unique per thread
+  basehaz[time] = basehaz_private*wt_totals[time]; // should be thread safe as time unique per thread
 }
 
 Rcout << " Calculating cumulative baseline hazard..." ;
 
-/* Carry forward last value of basehazard */
-double last_value = 0.0;
-
 cumhaz[0] = basehaz[0] ;
-for (R_xlen_t  t = 0; t < ntimes; t++)
-{
-  if (t>0) cumhaz[t] = cumhaz[t-1] +  basehaz[t];
-  if (basehaz[t] == 0.0)
-  {
-    basehaz[t] = last_value;
-  } else 
-  {
-    last_value = basehaz[t];
-  }
-}
+for (R_xlen_t  t = 1; t < ntimes; t++)
+    cumhaz[t] = cumhaz[t-1] +  basehaz[t];
 
 
 /* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
@@ -317,14 +314,14 @@ for (R_xlen_t  t = 0; t < ntimes; t++)
     R_xlen_t  time_index_entry = timein[rowobs] - 1; // std vectors use unsigned can be negative though for time 0
     
     double tempch = (cumhaz[time_index_entry] == 0) ? min_cumhaz : cumhaz[time_index_entry];
-    surv[rowobs] = pow(exp(-tempch),exp(zbeta[rowobs]));
+    surv[rowobs] = exp(-tempch * exp(zbeta[rowobs]));
   }  
 }
 
 
 delete[] denom;
-delete[] denom_private;
-delete[] wt_average;  
+delete[] efron_wt;
+delete[] wt_totals;  
 
 return List::create(_["xb_centred"] = zbeta,
                     _["Survival"] = surv,

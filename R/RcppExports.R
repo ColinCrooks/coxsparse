@@ -112,13 +112,13 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #'
 #' @details
 #' A function using the same data structure to calculate individual level linear predictors
-#' and survival at the observed times in using the fitted model coefficients and baseline hazards
+#' and survival at the observed event times using the centred fitted model coefficients 
+#' and baseline hazards with efton weighting for ties.
 #' 
-#' This function recalculates the individual time level linear predictors,
-#' and the survival probability for each person's time point if that covariate
-#' level was unchanged throughout the follow up.
-#'
-#' If time varying covariates are included then the linear predictor
+#' This function recalculates the individual time level linear predictors centred on the mean 
+#' across all observed times, and the survival probability for each person's time point 
+#' if that covariate level was unchanged throughout the follow up which might be meaningless;
+#' if time varying covariates are included then the linear predictor
 #' for each time point would need to be combined with the incremental 
 #' change in cumulative baseline hazard to calculate the cumulative risk.
 #'
@@ -153,6 +153,10 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' time row, so would be the time that a patient's corresponding
 #' covariate value starts. Of the same length as timeout, and outcomes. 
 #' Sorted by time out, time in, and patient id
+#' @param weights_in A double vector of weights to be applied to each unique
+#' patient time point when the model was fitted. 
+#' Of the same length as timein, timeout and outcomes. 
+#' Sorted by time out, time in, and patient id. 
 #' @param timeout_in An integer vector of the end time for each unique patient
 #' time row, so would be the time that a patient's corresponding outcome
 #' occurs. Only used to find maximum time out for survival prediction.
@@ -167,7 +171,10 @@ cox_reg_sparse_parallel <- function(modeldata, obs_in, coval_in, weights_in, tim
 #' @param idend_in An integer vector of the end row for each unique patient ID in idn_in
 #' @param threadn Number of threads to be used - caution as will crash if specify more
 #' threads than available memory for copying data for each thread.
-#' @return Numeric List with linear predictor and predicted survival.
+#' @return Numeric List with centred linear predictor, 
+#' centred baseline hazard increments(zero if no events),
+#' cumulative hazard, 
+#' and predicted survival.
 #'
 #' @export
 predictrisk <- function(beta_in, obs_in, coval_in, frailty_in, timein_in, weights_in, timeout_in, Outcomes_in, covstart_in, covend_in, idn_in, idstart_in, idend_in, threadn) {
