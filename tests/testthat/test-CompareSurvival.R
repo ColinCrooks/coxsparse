@@ -11,14 +11,15 @@ heart <- survival::heart
 heart.dt <- data.table::setDT(data.table::copy(heart))
 heart.dt$start <- heart.dt$start + 1
 heart.dt$stop <- heart.dt$stop + 1
-heart.dt <- rbind(heart.dt,data.table::data.table("start" = c(3,8,10),
-                    "stop"  = c(5,9,18),
-                    "event" = c(0,1,0),
-                    "age"   = c(0,0,0),
-                    "year"  = c(0,0,0),
-                    "surgery" = c(0,0,0),
-                    "transplant" = c(0,0,0),
-                    "id" = 104:106))
+heart.dt <- rbind(heart.dt,data.table::data.table(
+  "start" = c(3,8,10),
+  "stop"  = c(5,9,18),
+  "event" = c(0,1,0),
+  "age"   = c(0,0,0),
+  "year"  = c(0,0,0),
+  "surgery" = c(0,0,0),
+  "transplant" = c(0,0,0),
+  "id" = 104:106))
 
 heart.dt <- data.table::rbindlist(lapply(1:10,function(i) cbind(heart.dt, heart.dt$id+((i-1) * max(heart.dt$id)))))
 heart.dt[,id := V2]
@@ -138,7 +139,20 @@ expect_equal(coef(coxunreg), CoxRegListParallelbeta$Beta, tolerance =  1e-1)
 
 
 rbind(coef(coxunreg), CoxRegListParallelbeta$Beta)
+###############################################################################
 
+wnd <- 20
+n.knots <- 4
+knots <- unique(seq(1, wnd, wnd / n.knots)) * 20
+measure.points <- c(0:(2 * wnd)) * 20
+
+bspl <- splines::bs(
+  knots = unique(c(knots)),
+  x = measure.points,
+  intercept = T
+)
+
+##############################################################################
 ################### Frailty ###########
 library(coxsparse)
 library(RcppParallel)
@@ -232,7 +246,9 @@ idtable[,idlength := .N,id]
 idend <- as.integer(idtable[c(T,id[-1]!=id[-.N]),cumsum(idlength)])
 idstart <- as.integer(c(1,idend[-length(idend)]+1))
 idn <- as.integer(idtable[['idn']])
-rm(idtable,id)
+rm(idtable)
+
+ibeta_spl = c(2);
 
 set.seed(235739801)
 weights <- runif(length(Outcomes))
@@ -263,6 +279,7 @@ system.time(cox_reg_sparse_parallel(modeldata = CoxRegListParallelbetanoFrailty,
                                                          Outcomes_in = Outcomes,
                                                          covstart_in = covstart,
                                                          covend_in = covend,
+                                                         id_in = id,
                                                          idn_in = vector('integer',0L),
                                                          idstart_in = vector('integer',0L),
                                                          idend_in = vector('integer',0L),

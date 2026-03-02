@@ -48,7 +48,11 @@ Sorted by time out, time in, and patient id.}
 
 \item{timeout_in}{An integer vector of the end time for each unique patient
 time row, so would be the time that a patient's corresponding outcome
-occurs. Only used to find maximum time out for survival prediction.
+occurs. Only used to find maximum time out for survival prediction.}
+
+\item{Outcomes_in}{An integer vector of 0 (censored) or 1 (outcome) for the
+corresponding unique patient time. Of the same length as timein, timeout and
+weights. Sorted by time out, time in, and patient id
 Of the same length as timein, timeout and outcomes. Sorted by time out, time in, and patient id}
 
 \item{covstart_in}{An integer64 (from package bit64) vector of the start row for each covariate in coval}
