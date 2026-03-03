@@ -297,7 +297,7 @@ for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
      for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i] ; covi++) // iter over current covariates
      {
       R_xlen_t  rowobs = obs[covi] - 1 ;
-      R_xlen_t  time_index = timeout[rowobs] - 1;
+      R_xlen_t  time_index = timein[rowobs] - 1;
        if (Outcomes[rowobs] * weights[rowobs] > 0 ) {
          if (bs == 0) gdiag_private +=  coval[covi] * weights[rowobs];
   
@@ -306,7 +306,7 @@ for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
          for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
          {
              R_xlen_t  irowobs = idn[idi] - 1;      
-             R_xlen_t  itime_fu = timeout[irowobs] - 1;
+             R_xlen_t  itime_fu = timein[irowobs] - 1;
              R_xlen_t  itime_diff = itime_fu - time_index;
              if(itime_diff >0 && itime_diff <lookback) 
           //     for (bs = 1; bs <=  nbeta_spl; bs++)
@@ -375,12 +375,12 @@ for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++) //
     if (bs == 0) zbeta[rowobs] += beta[ibeta] * covali ; // each covariate occurs once in an observation time
     
     if (tvar == false)  continue;
-    R_xlen_t  time_index = timeout[rowobs] - 1;
+    R_xlen_t  time_index = timein[rowobs] - 1;
     
     for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
     {
       R_xlen_t  irowobs = idn[idi] - 1;      
-      R_xlen_t  itime_fu = timeout[irowobs] - 1;
+      R_xlen_t  itime_fu = timein[irowobs] - 1;
       R_xlen_t  itime_diff = itime_fu - time_index;
       if((itime_diff >0) && (itime_diff <lookback)) 
           zbeta[irowobs] += beta[ibeta] * bspl(itime_diff,bs);
@@ -423,23 +423,62 @@ newlk_private = 0.0;
     
     double zbeta_temp = zbeta[rowobs] >22 ? 22 : zbeta[rowobs];
     zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
-    double risk = exp(zbeta_temp) * weights[rowobs];
     zbeta[rowobs] = zbeta_temp;
-
-    //cumumlative sums for all patients
-    
-    for (R_xlen_t  r = time_index_exit ;  r > time_index_entry ; r--) // keep int for calculations of indices then cast
-    {
-      denom[r] += risk;
-    }
     
     if (Outcomes[rowobs]*weights[rowobs] > 0 )
     {
       /*cumumlative sums for event patients */
-      newlk_private += zbeta_temp * weights[rowobs];
-      efron_wt[time_index_exit] += risk;
+      newlk_private += zbeta[rowobs] * weights[rowobs];
+      efron_wt[time_index_exit] += exp(zbeta[rowobs]);
       
     }
+    
+    //Adjust contributuib of observation in denonominator across exposure period
+    
+    for (R_xlen_t  r = time_index_exit ;  r > time_index_entry ; r--) // for each time point of this exposure period
+    {   /* Each point in time covered by this observation row*/ 
+      for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // need to calculate the decay from all previous exposures times
+      {  /* Each observed time for this person */
+        R_xlen_t  irowobs = idn[idi] - 1;      // For this exposure
+        R_xlen_t  itime_exp = timein[irowobs] - 1;  // when
+        R_xlen_t  itime_diff = r - itime_exp;   // time since exposure 
+        
+        if((itime_diff >0) && (itime_diff <lookback)) 
+        {  /* Is the observation prior to this one within lookback period*/
+          i = 0;
+          bs = 0;
+          for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
+          { /* Find the time varying covariates indices */
+            bool tvar = false;
+              for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
+                if ((tvbeta_spl[ntv] == i) && (tvar == false)) tvar = true;  
+            if(tvar == true)
+            {
+              for (R_xlen_t  covi = covstart[ibeta] - 1; covi < covend[ibeta] ; covi++)
+              {  /* Is this time varying covariate observed at this time point*/
+                if (rowobs == obs[covi] - 1)   zbeta_temp += beta[ibeta] * (bspl(itime_diff,bs) - coval[covi]);
+              }
+            }
+            if (tvar == true) bs ++;
+            if ((tvar == false) || (bs > nbeta_spl)) {
+              bs = 0;
+              i++;
+            }
+          }
+        }
+      }
+      double zbeta_temp = zbeta_temp >22 ? 22 : zbeta_temp;
+      zbeta_temp = zbeta_temp < -200 ? -200 : zbeta_temp;
+      double risk = exp(zbeta_temp) * weights[rowobs];
+      //zbeta[rowobs] = zbeta_temp; // don't update underlying zbeta at observed points
+
+    //cumumlative sums for all patients
+    
+
+      denom[r] += risk;
+    }
+    
+
   }  
 }
 
@@ -447,7 +486,7 @@ newlk += newlk_private;
 
 
 // TODO update to tv on the fly - need something to trigger that tv is changing at this rowobs. 
-// Then for each idn within lookback not at a timeout minus contribution at timeout and add adjusted time out 
+// Then for each idn within lookback not at a timein minus contribution at timein and add adjusted time out 
 // for (i = 0; i < length(timevarObs); i++)
 // {
 //   R_xlen_t rowobs = timevarObs[i];
@@ -460,7 +499,7 @@ newlk += newlk_private;
 //     R_xlen_t  irowobs = idn[idi] - 1;      
 //     R_xlen_t  itime_entry = timein[irowobs] - 1;
 //     R_xlen_t  itime_exit = timeout[irowobs] - 1;
-//     R_xlen_t  istart_diff = itime_exit - time_index;
+//     R_xlen_t  istart_diff = itime_in - time_index_entry;
 //     
 //     for (R_xlen_t  r = itime_exit ;  r > itime_entry  ; r--) // keep int for calculations of indices then cast
 //     {
@@ -486,7 +525,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
     {
       i = 0;
       bs = 0;
-      for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; i++)
+      for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
       { 
         bool tvar = false;
         for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
@@ -514,7 +553,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
             {
               R_xlen_t  irowobs = idn[idi] - 1;      
-              R_xlen_t  itime_fu = timeout[irowobs] - 1;
+              R_xlen_t  itime_fu = timein[irowobs] - 1;
               R_xlen_t  itime_diff = itime_fu - time_index_exit;
               if(itime_diff >0 && itime_diff <lookback)
                 covali += bspl(itime_diff,bs);
@@ -523,17 +562,39 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
           
           double derivFirst = risk * covali;
           double derivSecond = derivFirst * covali;
-            
-          for (R_xlen_t  r = time_index_exit ;  r > time_index_entry ; r--) // keep int for calculations of indices then cast
-          {
-            derivMatrix[r] += derivFirst;
-            derivMatrix[ntimes + r] += derivSecond;
-          }
           if (Outcomes[rowobs]*weights[rowobs] > 0)
           {
             derivMatrix[(2*ntimes) + time_index_exit] += derivFirst ;
             derivMatrix[(3*ntimes) + time_index_exit] += derivSecond ;
           }
+          
+          double covali_tv = 0;
+          if (bs == 0 ) covali_tv = coval[covi] ;
+          for (R_xlen_t  r = time_index_exit ;  r > time_index_entry ; r--) // keep int for calculations of indices then cast
+          {
+            for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
+            {
+              { /* per observation time calculations */
+                bool tvar = false;
+                for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
+                  if ((tvbeta_spl[ntv] == i) && (tvar == false)) tvar = true;  
+                  if(tvar == true)
+                  {
+                    R_xlen_t  irowobs = idn[idi] - 1;      
+                    R_xlen_t  itime_fu = timein[irowobs] - 1;
+                    R_xlen_t  itime_diffvar = itime_fu - time_index_entry;
+                    
+                    if((itime_diff >0) && (itime_diff <lookback)) 
+                      covali_tv += (bspl(itime_diffvar,bs));
+                  }
+              }
+            }
+            derivFirst = exp(zbeta[rowobs] + beta[ibeta]*(covali_tv - coval[covi])) * weights[rowobs] * covali_tv;
+            derivSecond = derivFirst * covali_tv;
+            derivMatrix[r] += derivFirst;
+            derivMatrix[ntimes + r] += derivSecond;
+          }
+
 
 
         }
@@ -611,12 +672,12 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             if (bs == 0 ) covali = coval[covi] ;
             else 
             {
-              R_xlen_t  time_index = timeout[rowobs] - 1;
+              R_xlen_t  time_index = timein[rowobs] - 1;
               
               for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
               {
                 R_xlen_t  irowobs = idn[idi] - 1;      
-                R_xlen_t  itime_fu = timeout[irowobs] - 1;
+                R_xlen_t  itime_fu = timein[irowobs] - 1;
                 R_xlen_t  itime_diff = itime_fu - time_index;
                 if(itime_diff >0 && itime_diff <lookback)
                   covali += bspl(itime_diff,bs);
@@ -635,8 +696,27 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             R_xlen_t  time_index_entry =  timein[rowobs] - 1;
             R_xlen_t  time_index_exit =  timeout[rowobs] - 1;
             
+            double covali_tv = 0;
+            if (bs == 0 ) covali_tv = coval[covi] ;
             for (R_xlen_t  r = time_index_exit;  r > time_index_entry ; r--)
-              denom_private[r] += riskdiff; 
+            {
+              { /* per observation time calculations */
+                if(tvar == true)
+                {
+                    for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
+                    {
+                      R_xlen_t  irowobs = idn[idi] - 1;      
+                      R_xlen_t  itime_fu = timein[irowobs] - 1;
+                      R_xlen_t  itime_diffvar = itime_fu - time_index_entry;
+                      
+                      if((itime_diff >0) && (itime_diff <lookback)) 
+                        covali_tv += (bspl(itime_diffvar,bs));
+                    }
+                }
+              denom_private[r] += (exp(zbeta[rowobs] - (dif * covali_tv)) - riskold) * weights[rowobs]; 
+              }
+            }
+              
             
             if (Outcomes[rowobs]*weights[rowobs] > 0 )
             {
