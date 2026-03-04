@@ -37,7 +37,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // cox_reg_sparse_parallel_TV
-void cox_reg_sparse_parallel_TV(List modeldata, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector id_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, NumericMatrix bspl_in, NumericVector tvbeta_spl_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
+void cox_reg_sparse_parallel_TV(List modeldata, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector id_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, NumericMatrix bspl_in, LogicalVector tvbeta_spl_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
 RcppExport SEXP _coxsparse_cox_reg_sparse_parallel_TV(SEXP modeldataSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP id_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP bspl_inSEXP, SEXP tvbeta_spl_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP MAX_EPSSEXP, SEXP threadnSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -55,7 +55,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerVector >::type idstart_in(idstart_inSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type idend_in(idend_inSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type bspl_in(bspl_inSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type tvbeta_spl_in(tvbeta_spl_inSEXP);
+    Rcpp::traits::input_parameter< LogicalVector >::type tvbeta_spl_in(tvbeta_spl_inSEXP);
     Rcpp::traits::input_parameter< double >::type lambda(lambdaSEXP);
     Rcpp::traits::input_parameter< double >::type theta_in(theta_inSEXP);
     Rcpp::traits::input_parameter< int >::type MSTEP_MAX_ITER(MSTEP_MAX_ITERSEXP);

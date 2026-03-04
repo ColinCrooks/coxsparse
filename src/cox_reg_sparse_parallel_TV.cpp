@@ -122,7 +122,7 @@ void cox_reg_sparse_parallel_TV( List modeldata,
                               IntegerVector idstart_in,
                               IntegerVector idend_in,
                               NumericMatrix bspl_in,
-                              NumericVector tvbeta_spl_in,
+                              LogicalVector tvbeta_spl_in,
                               double lambda,
                               double theta_in ,
                               int MSTEP_MAX_ITER,
@@ -150,7 +150,7 @@ void cox_reg_sparse_parallel_TV( List modeldata,
 
    int lookback = bspl_in.nrow();
    int nbeta_spl = bspl_in.ncol() - 1;
-      
+
    R_xlen_t  ntimes = Rcpp::max(timeout_in);  // Unique times but don't accumulate for time 0 as no events
    R_xlen_t  maxobs = Rcpp::max(obs_in);
    R_xlen_t  nvar = covstart_in.length();// +
@@ -216,8 +216,8 @@ void cox_reg_sparse_parallel_TV( List modeldata,
    std::vector<int64_t> covstart = Rcpp::fromInteger64(covstart_in); 
    std::vector<int64_t> covend =Rcpp::fromInteger64(covend_in); 
    
-   std::vector<int64_t> tvbeta_spl = Rcpp::fromInteger64(tvbeta_spl_in);
-   int nvar_spl = tvbeta_spl_in.length();
+   RcppParallel::RVector<bool> tvbeta_spl(tvbeta_spl_in);
+   
    
    RcppParallel::RVector<int>  id(id_in);
    RcppParallel::RVector<int>  idn(idn_in);
@@ -287,13 +287,9 @@ R_xlen_t bs = 0;
 //   Rcout << "counting numerators, ";
 for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
 { /* per observation time calculations */
-  bool tvar = false;
-  for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
-    if (tvbeta_spl[ntv] == i && tvar == false) tvar = true;  
-  
    double gdiag_private = 0.0;
      
-#pragma omp parallel for default(none) reduction(+:gdiag_private) shared(tvar, gdiagbeta, covstart, covend, coval,  weights,  Outcomes, obs, i, ibeta, bs, bspl, nvar_spl, lookback, id,idstart,idend,idn,timeout) 
+#pragma omp parallel for default(none) reduction(+:gdiag_private) shared(tvbeta_spl, gdiagbeta, covstart, covend, coval,  weights,  Outcomes, obs, i, ibeta, bs, bspl, lookback, id,idstart,idend,idn,timeout,timein) 
      for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i] ; covi++) // iter over current covariates
      {
       R_xlen_t  rowobs = obs[covi] - 1 ;
@@ -301,22 +297,22 @@ for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
        if (Outcomes[rowobs] * weights[rowobs] > 0 ) {
          if (bs == 0) gdiag_private +=  coval[covi] * weights[rowobs];
   
-         if (tvar == false) continue;// don't need to calculate across time if not time varying
+         if (tvbeta_spl[i] == false) continue;// don't need to calculate across time if not time varying
          
-         for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
+         for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over other subsequent times when this exposure might have tv effect
          {
              R_xlen_t  irowobs = idn[idi] - 1;      
              R_xlen_t  itime_fu = timein[irowobs] - 1;
              R_xlen_t  itime_diff = itime_fu - time_index;
              if(itime_diff >0 && itime_diff <lookback) 
           //     for (bs = 1; bs <=  nbeta_spl; bs++)
-                 gdiag_private +=  bspl(itime_diff,bs) * weights[irowobs];
+                 gdiag_private +=  bspl(itime_diff,bs) * weights[irowobs]; // This is a per beta update across all times
          }
        }
      }
      gdiagbeta[ibeta] = gdiag_private;
-     if (tvar == true) bs ++;
-     if ((tvar == false) || (bs > nbeta_spl)) {
+     if (tvbeta_spl[i] == true) bs ++;
+     if ((tvbeta_spl[i] == false) || (bs > nbeta_spl)) {
        bs = 0;
        i++;
      }
@@ -359,36 +355,35 @@ bs = 0;
 //Rcout << "summing zbeta with covariates, ";
 for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++) // 
 { /* per observation time calculations */
-  bool tvar = false;
-  for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
-    if ((tvbeta_spl[ntv] == i) && (tvar == false)) tvar = true;  
-  
-  
 
-#pragma omp parallel  default(none)  shared(i, bs,tvar, covstart, covend, maxobs, coval, beta,  obs, zbeta, ibeta, timeout, idstart,idend,id,idn,bspl, lookback) 
+#pragma omp parallel  default(none)  shared(i, bs,tvbeta_spl, covstart, covend, maxobs, coval, beta,  obs, zbeta, ibeta,timein, timeout, idstart,idend,id,idn,bspl, lookback) 
 {
 #pragma omp for
   for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i]; covi++)
   {
     R_xlen_t  rowobs =  obs[covi] - 1 ;
     double covali =  coval[covi] ;
-    if (bs == 0) zbeta[rowobs] += beta[ibeta] * covali ; // each covariate occurs once in an observation time
     
-    if (tvar == false)  continue;
+    if (bs == 0) 
+#pragma omp atomic
+      zbeta[rowobs] += beta[ibeta] * covali ; // each covariate occurs once in an observation time
+    
+    if (tvbeta_spl[i] == false)  continue;
     R_xlen_t  time_index = timein[rowobs] - 1;
     
-    for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
+    for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over subsequent times this exposure might impact
     {
       R_xlen_t  irowobs = idn[idi] - 1;      
       R_xlen_t  itime_fu = timein[irowobs] - 1;
       R_xlen_t  itime_diff = itime_fu - time_index;
       if((itime_diff >0) && (itime_diff <lookback)) 
-          zbeta[irowobs] += beta[ibeta] * bspl(itime_diff,bs);
+#pragma omp atomic
+        zbeta[irowobs] += beta[ibeta] * bspl(itime_diff,bs); //add exposure to subsequent times - needs to be atomic as parallel by beta
     }
   }
 }
-  if (tvar == true) bs ++;
-  if ((tvar == false) || (bs > nbeta_spl)) {
+  if (tvbeta_spl[i] == true) bs ++;
+  if ((tvbeta_spl[i] == false) || (bs > nbeta_spl)) {
     bs = 0;
     i++;
   }
@@ -413,7 +408,7 @@ if (recurrent == 1)
 /* Check zbeta Okay and calculate cumulative sums that do not depend on the specific covariate update*/
 newlk_private = 0.0;
 
-#pragma omp parallel  default(none) reduction(+:newlk_private, denom[:ntimes], efron_wt[:ntimes])  shared(timein, timeout, zbeta, weights,  Outcomes , ntimes,maxobs)
+#pragma omp parallel  default(none) reduction(+:newlk_private, denom[:ntimes], efron_wt[:ntimes])  shared(obs,bspl,tvbeta_spl, nvar,timein, timeout,idstart,idend,id,idn, zbeta, weights,  Outcomes , ntimes,maxobs,tvbeta_spl)
 {
 #pragma omp for
   for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++)
@@ -433,7 +428,8 @@ newlk_private = 0.0;
       
     }
     
-    //Adjust contributuib of observation in denonominator across exposure period
+    //Adjust contribution of observation in denonominator across exposure period
+    //Note this is the opposite direction to the previous time varying adjustments
     
     for (R_xlen_t  r = time_index_exit ;  r > time_index_entry ; r--) // for each time point of this exposure period
     {   /* Each point in time covered by this observation row*/ 
@@ -445,22 +441,23 @@ newlk_private = 0.0;
         
         if((itime_diff >0) && (itime_diff <lookback)) 
         {  /* Is the observation prior to this one within lookback period*/
-          i = 0;
-          bs = 0;
+          int i = 0;
+          int bs = 0;
           for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
           { /* Find the time varying covariates indices */
-            bool tvar = false;
-              for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
-                if ((tvbeta_spl[ntv] == i) && (tvar == false)) tvar = true;  
-            if(tvar == true)
+ 
+            if(tvbeta_spl[i] == true)
             {
-              for (R_xlen_t  covi = covstart[ibeta] - 1; covi < covend[ibeta] ; covi++)
+              for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i] ; covi++) // should iterate only over previous times within look back and break when past it
               {  /* Is this time varying covariate observed at this time point*/
-                if (rowobs == obs[covi] - 1)   zbeta_temp += beta[ibeta] * (bspl(itime_diff,bs) - coval[covi]);
+           //     if (timein[obs[covi] - 1] - 1 > itime_exp) break; // 2 comparisons per loop slower than 1 or early breaking quicker?
+                if (rowobs == obs[covi] - 1)   
+                { /* iterate over splines at this point*/
+                  zbeta_temp += beta[ibeta] * (bspl(itime_diff,bs) - coval[covi]);
+                }
               }
             }
-            if (tvar == true) bs ++;
-            if ((tvar == false) || (bs > nbeta_spl)) {
+            if ((tvbeta_spl[i] == false) || (bs > nbeta_spl)) {
               bs = 0;
               i++;
             }
@@ -527,18 +524,15 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
       bs = 0;
       for (R_xlen_t  ibeta = 0; ibeta < nvar + nbeta_spl; ibeta++)
       { 
-        bool tvar = false;
-        for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
-          if ((tvbeta_spl[ntv] == i) && (tvar == false)) tvar = true;
-          
+
         double gdiag =  -gdiagbeta[ibeta];
         double hdiag = 0.0;
 //        Rcout << "accumulating derivatives, ";        
         for (R_xlen_t  ir = 0; ir < (ntimes*4); ir++) derivMatrix[ir] = 0.0;
-#pragma omp parallel default(none) reduction(+:derivMatrix[:ntimes*4]) shared( covstart, covend, coval, weights, Outcomes, ntimes, obs, timein, timeout, zbeta,i,ibeta,bs, nvar, idstart, idend, id,idn, bspl,lookback) //covn, 
+#pragma omp parallel default(none) reduction(+:derivMatrix[:ntimes*4]) shared(tvbeta_spl, covstart, covend, coval, weights, Outcomes, ntimes, obs, timein, timeout, zbeta,i,ibeta,bs, nvar, idstart, idend, id,idn, bspl,lookback) //covn, 
 {
 #pragma omp for
-        for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i]; covi++)
+        for (R_xlen_t  covi = covstart[i] - 1; covi < covend[i]; covi++) 
         {
           R_xlen_t  rowobs = (obs[covi] - 1) ;
           R_xlen_t  time_index_entry = timein[rowobs] - 1; // std vectors use unsigned can be negative though for time 0
@@ -550,13 +544,17 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
           if (bs == 0 ) covali = coval[covi] ;
           else 
           {
-            for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
+            for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // When covariate in past but still effect on current time point
             {
               R_xlen_t  irowobs = idn[idi] - 1;      
-              R_xlen_t  itime_fu = timein[irowobs] - 1;
-              R_xlen_t  itime_diff = itime_fu - time_index_exit;
+              R_xlen_t  itime_exp = timein[irowobs] - 1;
+              R_xlen_t  itime_diff = time_index_entry - itime_exp;
               if(itime_diff >0 && itime_diff <lookback)
-                covali += bspl(itime_diff,bs);
+                for (R_xlen_t  covi_tv = covstart[i] - 1; covi_tv < covend[i] ; covi_tv++) // should iterate only over previous times within look back and break when past it
+                {  /* Is this time varying covariate observed at this time point*/
+                  if (irowobs == obs[covi_tv] - 1)
+                    covali += bspl(itime_diff,bs);  
+                }
             }
           }
           
@@ -575,17 +573,18 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
             {
               { /* per observation time calculations */
-                bool tvar = false;
-                for (R_xlen_t ntv = 0 ; ntv < nvar_spl; ntv++) 
-                  if ((tvbeta_spl[ntv] == i) && (tvar == false)) tvar = true;  
-                  if(tvar == true)
+                  if(tvbeta_spl[i] == true)
                   {
                     R_xlen_t  irowobs = idn[idi] - 1;      
                     R_xlen_t  itime_fu = timein[irowobs] - 1;
-                    R_xlen_t  itime_diffvar = itime_fu - time_index_entry;
+                    R_xlen_t  itime_diffvar = r - itime_fu;
                     
-                    if((itime_diff >0) && (itime_diff <lookback)) 
-                      covali_tv += (bspl(itime_diffvar,bs));
+                    if((itime_diffvar >0) && (itime_diffvar <lookback)) 
+                      for (R_xlen_t  covi_tv = covstart[i] - 1; covi_tv < covend[i] ; covi_tv++) // should iterate only over previous times within look back and break when past it
+                      {  /* Is this time varying covariate observed at this time point*/
+                        if (irowobs == obs[covi_tv] - 1)
+                          covali_tv += (bspl(itime_diffvar,bs));
+                      }
                   }
               }
             }
@@ -680,7 +679,11 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
                 R_xlen_t  itime_fu = timein[irowobs] - 1;
                 R_xlen_t  itime_diff = itime_fu - time_index;
                 if(itime_diff >0 && itime_diff <lookback)
-                  covali += bspl(itime_diff,bs);
+                  for (R_xlen_t  covi_tv = covstart[i] - 1; covi_tv < covend[i] ; covi_tv++) // should iterate only over previous times within look back and break when past it
+                  {  /* Is this time varying covariate observed at this time point*/
+                    if (irowobs == obs[covi_tv] - 1)
+                      covali += bspl(itime_diff,bs);
+                  }
               }
             }
             
@@ -701,16 +704,20 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             for (R_xlen_t  r = time_index_exit;  r > time_index_entry ; r--)
             {
               { /* per observation time calculations */
-                if(tvar == true)
+                if(tvbeta_spl[i] == true)
                 {
                     for (R_xlen_t  idi = idstart[id[rowobs]] - 1; idi < idend[id[rowobs]] ; idi++) // iter over current covariates
                     {
                       R_xlen_t  irowobs = idn[idi] - 1;      
                       R_xlen_t  itime_fu = timein[irowobs] - 1;
-                      R_xlen_t  itime_diffvar = itime_fu - time_index_entry;
+                      R_xlen_t  itime_diffvar = r - itime_fu;
                       
                       if((itime_diff >0) && (itime_diff <lookback)) 
-                        covali_tv += (bspl(itime_diffvar,bs));
+                        for (R_xlen_t  covi_tv = covstart[i] - 1; covi_tv < covend[i] ; covi_tv++) // should iterate only over previous times within look back and break when past it
+                        {  /* Is this time varying covariate observed at this time point*/
+                          if (irowobs == obs[covi_tv] - 1)
+                            covali_tv += (bspl(itime_diffvar,bs));
+                        }
                     }
                 }
               denom_private[r] += (exp(zbeta[rowobs] - (dif * covali_tv)) - riskold) * weights[rowobs]; 
@@ -732,8 +739,8 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
           }
           newlk -= newlk_private; // min  beta updated = beta - diff
 
-          if (tvar == true) bs ++;
-          if ((tvar == false) || (bs > nbeta_spl)) {
+          if (tvbeta_spl[i] == true) bs ++;
+          if ((tvbeta_spl[i] == false) || (bs > nbeta_spl)) {
             bs = 0;
             i++;
           }
