@@ -55,28 +55,28 @@ corresponding unique patient time in the time and outcome vectors. Of the
 same length as coval. The maximum value is the length of timein and timeout.}
 
 \item{coval_in}{A double vector of each covariate value sorted first by order
-of the covariates then by time then by patient and to be included in model.
+of the covariates then by patient then by time and to be included in model.
 Of the same longth as obs_in.
 \code{coval_in[i] ~ timein_in[obs_in[i]]}, \code{timeout_in[obs_in[i]]},
 \code{Outcomes_in[obs_in[i]]},}
 
 \item{weights_in}{A double vector of weights to be applied to each unique
 patient time point. Of the same length as timein, timeout and outcomes.
-Sorted by time out, time in, and patient id.}
+Sorted by patient id, time out, and time in.}
 
 \item{timein_in}{An integer vector of the start time for each unique patient
 time row, so would be the time that a patient's corresponding
 covariate value starts. Of the same length as weights, timeout, and outcomes.
-Sorted by time out, time in, and patient id}
+Sorted by patient id, time out, and time in.}
 
 \item{timeout_in}{An integer vector of the end time for each unique patient
 time row, so would be the time that a patient's corresponding outcome
 occurs. Of the same length as weights, timein, timeout and outcomes. Sorted
-by time out, time in, and patient id}
+by patient id, time out, and time in.}
 
 \item{Outcomes_in}{An integer vector of 0 (censored) or 1 (outcome) for the
 corresponding unique patient time. Of the same length as timein, timeout and
-weights. Sorted by time out, time in, and patient id}
+weights. Sorted by patient id, time out, and time in.}
 
 \item{covstart_in}{An integer64 (from package bit64) vector of the start row
 for each covariate in coval Uses}
@@ -88,7 +88,7 @@ each covariate in coval}
 corresponding rows in time_in, timeout_in and Outcomes_in}
 
 \item{idn_in}{An integer vector mapping unique patient IDs sorted by ID to the
-corresponding row in observations sorted by time out, time in, and patient id
+corresponding row in observations sorted by patient id, time out, and time in.
 For id = i the corresponding rows in time_in, timeout_in and Outcomes_in
 are the rows listed between \code{idn_in[idstart_in[i]]:idn_in[idend_in[i]]}}
 
@@ -99,7 +99,8 @@ in idn_in}
 in idn_in}
 
 \item{bspl_in}{A matrix of doubles with containing the spline basis
-(ncol = number of betas used, nrow = ntimes at which splines calculated (lookback))}
+(ncol = number of betas used, nrow = ntimes at which splines calculated (lookback))
+First row should be for time zero with weight 1 on 1st beta}
 
 \item{tvbeta_spl_in}{An integer64 vector for indexing which covariates are to be
 converted to time varying with the spline basis}
