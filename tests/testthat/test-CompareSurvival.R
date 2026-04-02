@@ -4,6 +4,7 @@ library(bit64)
 library(coxsparse)
 library(RcppParallel)
 library(testthat)
+devtools::load_all()
 idvars <- c('id', 'start', 'stop', 'event')
 covlist <- c('age', 'year', 'surgery', 'transplant')
 reshapevars <- c(idvars, covlist)
@@ -203,7 +204,9 @@ bspl <- splines::bs(
 
 CoxRegListParallelbeta <- list()
 
-CoxRegListParallelbeta[['Beta']] <- vector('double', length(covstart))
+tvbeta_spl <- c(0, 0, 1, 1)
+
+CoxRegListParallelbeta[['Beta']] <- vector('double', length(covstart) + (sum(tvbeta_spl)*ncol(bspl)) - sum(tvbeta_spl) )
 CoxRegListParallelbeta[['Frailty']] <- vector('double', length(idstart))
 CoxRegListParallelbeta[['basehaz']] <- vector('double', max(timeout))
 CoxRegListParallelbeta[['cumhaz']] <- vector('double', max(timeout))
@@ -221,14 +224,14 @@ system.time(cox_reg_sparse_parallel_TV(
   covstart_in = covstart,
   covend_in = covend,
   id_in = id,
-  idn_in = idn,
-  idstart_in = idstart,
-  idend_in = idend,
-  tvbeta_spl_in = c(0, 0, 1, 1),
+  idn_in = vector('integer', 0L),
+  idstart_in = vector('integer', 0L),
+  idend_in = vector('integer', 0L),
+  tvbeta_spl_in = tvbeta_spl,
   bspl_in = bspl,
   lambda = lambda,
   theta_in = 0,
-  MSTEP_MAX_ITER = 1,
+  MSTEP_MAX_ITER = 10,
   MAX_EPS = 1e-10,
   threadn = 32
 ))
@@ -250,6 +253,9 @@ rats.dt[, start := 0]
 data.table::setnames(rats.dt, 'time', 'stop')
 data.table::setnames(rats.dt, 'litter', 'id')
 data.table::setnames(rats.dt, 'status', 'event')
+
+rats.dt[,start := shift(stop, type ='lag',fill =0,n = 1L), by = id]
+
 
 rats.dt$start <- rats.dt$start + 1
 rats.dt$stop <- rats.dt$stop + 1
@@ -274,10 +280,13 @@ for (c in covlist) {
   rats.dt[, (c) := as.numeric(as.factor(get(c))) - 1]
 }
 
-idtimevar <- c('stop', 'start', 'id', 'event')
+idtimevar <- c('id','stop', 'start',  'event')
 
 data.table::setkeyv(rats.dt, idtimevar)
 rats.dt[, rowobs := .I]
+
+id <- as.integer(rats.dt[['id']])
+
 ####################################################################
 
 covstart <- as.integer64(1)
@@ -358,6 +367,43 @@ weights <- runif(length(Outcomes))
 setThreadOptions(numThreads = 32)
 
 lambda = 0
+
+########################################################
+
+
+tvbeta_spl <- c(1, 0)
+
+CoxRegListParallelbeta[['Beta']] <- vector('double', length(covstart) + (sum(tvbeta_spl)*ncol(bspl)) - sum(tvbeta_spl) )
+CoxRegListParallelbeta[['Frailty']] <- vector('double', length(idstart))
+CoxRegListParallelbeta[['basehaz']] <- vector('double', max(timeout))
+CoxRegListParallelbeta[['cumhaz']] <- vector('double', max(timeout))
+CoxRegListParallelbeta[['ModelSummary']] <- vector('double', 8)
+
+Sys.time()
+system.time(cox_reg_sparse_parallel_TV(
+  modeldata = CoxRegListParallelbeta,
+  obs_in = obs,
+  Outcomes_in = Outcomes,
+  timein_in = timein,
+  timeout_in = timeout,
+  weights_in = weights,
+  coval_in = coval,
+  covstart_in = covstart,
+  covend_in = covend,
+  id_in = id,
+  idn_in = vector('integer', 0L),
+  idstart_in = vector('integer', 0L),
+  idend_in = vector('integer', 0L),
+  tvbeta_spl_in = tvbeta_spl,
+  bspl_in = bspl,
+  lambda = lambda,
+  theta_in = 0,
+  MSTEP_MAX_ITER = 10,
+  MAX_EPS = 1e-10,
+  threadn = 32
+))
+###########################################################
+
 CoxRegListParallelbetanoFrailty <- list()
 
 CoxRegListParallelbetanoFrailty[['Beta']] <- vector('double', length(covstart))
