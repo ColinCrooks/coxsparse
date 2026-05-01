@@ -7,7 +7,7 @@
 #include <cmath>
 
 using namespace Rcpp;
-//' cox_reg_sparse_parallel_TV
+//' cox_reg_sparse_parallel_TV_slow
 //' 
 //' @description
 //' Implementation of a Cox proportional hazards model using 
@@ -111,7 +111,7 @@ using namespace Rcpp;
 //' @return Void: see the model data input list for the output.
 //' @export
 // [[Rcpp::export]]
-void cox_reg_sparse_parallel_TV( List modeldata, 
+void cox_reg_sparse_parallel_TV_slow( List modeldata, 
                               IntegerVector obs_in,
                               DoubleVector  coval_in,
                               DoubleVector  weights_in,
@@ -267,8 +267,7 @@ void cox_reg_sparse_parallel_TV( List modeldata,
 
   // Objects for TV variables  
   struct ExposureRecord {
-    int starttime;
-    int endtime;
+    int time;
     double value;
     };
   
@@ -372,15 +371,15 @@ for (R_xlen_t  ibeta = 0; ibeta < nallvar; ibeta++) { /* per observation time ca
         if(lastID != currentID) 
           tv_data[covi_spl_i].clear(); 
         lastID = currentID;
-      //  for (int t = time_index_entry; t < time_index_exit; t ++) {
-          ExposureRecord exposure_record = {time_index_entry,time_index_exit, covali};
+        for (int t = time_index_entry; t < time_index_exit; t ++) {
+          ExposureRecord exposure_record = {t, covali};
           tv_data[covi_spl_i].push_back(exposure_record);
-      //    }
+          }
 
         tv_data[covi_spl_i].erase(std::remove_if(tv_data[covi_spl_i].begin(), 
                                                  tv_data[covi_spl_i].end(), 
                                                  [time_index_entry, lookback](const ExposureRecord& record) {
-                                                   if(time_index_entry - record.starttime >= lookback ) 
+                                                   if(time_index_entry - record.time >= lookback ) 
                                                      return true; 
                                                    else 
                                                      return false; 
@@ -390,44 +389,25 @@ for (R_xlen_t  ibeta = 0; ibeta < nallvar; ibeta++) { /* per observation time ca
  //       if (rowobs == 1418) Rcout << " in " << time_index_entry << " out " << time_index_exit << std::endl;
         
         for (auto& record : tv_data[covi_spl_i]) {
-       //   if(record.starttime > time_index_entry) break;  // only prior exposure can effect current time
-          int itimestart_diff = time_index_entry - record.starttime;
-          if (itimestart_diff < 0) 
-            itimestart_diff = 0;
-          if (itimestart_diff >= lookback)
-            itimestart_diff = lookback;
+       //   if(record.time > time_index_entry) break;  // only prior exposure can effect current time
+          int itimestart_diff = time_index_entry - record.time;
+          int itimeexit_diff = time_index_exit - 1 - record.time; //needs to be exposure before exit so -1
           
-          int itimeend_diff = record.endtime > time_index_entry ? 0 : time_index_entry - record.endtime;
           
-
-          
-          //if(itimestart_diff >= 0 && itimestart_diff < lookback ) {
-            //if (currentID == 2925)  Rcout << " time " << record.starttime << " itimestart_diff " << itimestart_diff << " record.value " <<
+          if(itimestart_diff >= 0 && itimestart_diff < lookback ) {
+            //if (currentID == 2925)  Rcout << " time " << record.time << " itimestart_diff " << itimestart_diff << " record.value " <<
             //  record.value << " bspl(itimestart_diff,bs) " << bspl(itimestart_diff,bs) << " bspl(itimeexit_diff,bs) "<<  bspl(itimeexit_diff,bs) << 
               //  " update " << record.value * beta[ibeta] * bspl(itimestart_diff,bs)<<std::endl;
-          for (int recordtime = itimeend_diff; recordtime < itimestart_diff; recordtime++) {
+            
 #pragma omp atomic
-            zbeta[rowobs] += record.value * beta[ibeta] * bspl(recordtime,bs); // zbeta reflects the exposure covariates at the start of the observation period - will be updated at each time point for the time varying betas with the spline basis functions. This is because the risk at the start of the period is what determines the likelihood contribution for that period, and the risk at the end of the period determines the likelihood contribution for the next period. So for a time varying beta with a spline basis function we need to calculate the contribution to zbeta at each time point in the lookback window and then remove it when it falls out of the lookback window. This is because we are using a cyclical coordinate descent algorithm and so we need to update zbeta at each iteration for each covariate. The contribution to zbeta will be different for each covariate and so we need to calculate it separately for each covariate. The contribution to zbeta will also be different for each time point in the lookback window and so we need to calculate it separately for each time point in the lookback window. The contribution to zbeta will also be different for each observation and so we need to calculate it separately for each observation.
+            zbeta[rowobs] += record.value * beta[ibeta] * bspl(itimestart_diff,bs); // zbeta reflects the exposure covariates at the start of the observation period - will be updated at each time point for the time varying betas with the spline basis functions. This is because the risk at the start of the period is what determines the likelihood contribution for that period, and the risk at the end of the period determines the likelihood contribution for the next period. So for a time varying beta with a spline basis function we need to calculate the contribution to zbeta at each time point in the lookback window and then remove it when it falls out of the lookback window. This is because we are using a cyclical coordinate descent algorithm and so we need to update zbeta at each iteration for each covariate. The contribution to zbeta will be different for each covariate and so we need to calculate it separately for each covariate. The contribution to zbeta will also be different for each time point in the lookback window and so we need to calculate it separately for each time point in the lookback window. The contribution to zbeta will also be different for each observation and so we need to calculate it separately for each observation.
             }
-        
-
-        
-        
-          if (Outcomes[rowobs] * weights[rowobs] > 0)  {
-//           if (currentID == 2925) Rcout <<  " time " << record.starttime << " lookback " << ((itimeexit_diff>=0) && (itimeexit_diff < lookback)) << 
+          if ((Outcomes[rowobs] * weights[rowobs] > 0) && (itimeexit_diff>=0) &&  (itimeexit_diff < lookback)) {
+//           if (currentID == 2925) Rcout <<  " time " << record.time << " lookback " << ((itimeexit_diff>=0) && (itimeexit_diff < lookback)) << 
 //              " itimeexit_diff " << itimeexit_diff <<" gdiag update "  << record.value * bspl(itimeexit_diff,bs) * weights[rowobs] <<std::endl; 
-            int itimeexit_diff = time_index_exit - 1 - record.starttime; //needs to be exposure before exit so -1
-            if (itimeexit_diff < 0) 
-              itimeexit_diff = 0;
-            if (itimeexit_diff >= lookback)
-              itimeexit_diff = lookback;
-            
-            int itimeendexit_diff = record.endtime > time_index_exit - 1 ? 0 : time_index_entry - 1 - record.endtime;
-            
-            for (int recordtime = itimeendexit_diff; recordtime < itimeexit_diff; recordtime++)
-              gdiag_private +=  record.value * bspl(recordtime,bs) * weights[rowobs]; // When time varying the numerator will be the risk just before the event
+            gdiag_private +=  record.value * bspl(itimeexit_diff,bs) * weights[rowobs]; // When time varying the numerator will be the risk just before the event
             }
-          }   
+          }
         }
     }
   
@@ -554,10 +534,10 @@ for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++) { /* unique per patient/ti
 
         for (; covi < covend[i] && obs[covi] - 1 <= rowobs;  ) { // For this tv beta find prior exposure at this itime if exists
    //       Rcout << " covi " << covi << " covi_spl_i " << covi_spl_i << " id " << id[obs[covi] - 1]  - 1 << " currentID" <<currentID<< std::endl;
-       //   for (int t = timein[obs[covi] - 1]; t < timeout[obs[covi] - 1]; t ++) {
-            ExposureRecord exposure_record = {timein[obs[covi] - 1],timeout[obs[covi] - 1], coval[covi]};
+          for (int t = timein[obs[covi] - 1]; t < timeout[obs[covi] - 1]; t ++) {
+            ExposureRecord exposure_record = {t, coval[covi]};
             tv_data[covi_spl_i].push_back(exposure_record);
-     //       }
+            }
           ++covi; // only increment if this covi has been used and pushed to vectors
           }
         covi_spl[covi_tv_i] = covi;
@@ -571,7 +551,7 @@ for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++) { /* unique per patient/ti
             tv_data[covi_spl_i].erase(std::remove_if(tv_data[covi_spl_i].begin(),
                                                      tv_data[covi_spl_i].end(), 
                                                      [r, lookback](const ExposureRecord& record) {
-                                                       if(r - record.starttime >= lookback ) 
+                                                       if(r - record.time >= lookback ) 
                                                          return true; 
                                                        else 
                                                          return false; 
@@ -579,31 +559,17 @@ for (R_xlen_t  rowobs = 0; rowobs < maxobs; rowobs++) { /* unique per patient/ti
                                                        tv_data[covi_spl_i].end()
                                         );
             for (auto& record : tv_data[covi_spl_i]) {
-      //        if(record.starttime > r) break; // only prior exposure can effect current time
+      //        if(record.time > r) break; // only prior exposure can effect current time
               
-           //   int itime_diff = r - record.starttime;
-              int indextime_diff = time_index_entry - record.starttime;
-              
-              
-              //   if(record.starttime > time_index_entry) break;  // only prior exposure can effect current time
-              int itimestart_diff = r - record.starttime;
-              if (itimestart_diff < 0) 
-                itimestart_diff = 0;
-              if (itimestart_diff >= lookback)
-                itimestart_diff = lookback;
-              
-              int itimeend_diff = record.endtime > time_index_entry ? 0 : time_index_entry - record.endtime;
-              
-          //    if (itime_diff >= 0 && itime_diff < lookback) { 
+              int itime_diff = r - record.time;
+              int indextime_diff = time_index_entry - record.time;
+              if (itime_diff >= 0 && itime_diff < lookback) { 
       //          Rcout << " itime_diff " << itime_diff << " indextime_diff " << indextime_diff << std::endl;
-              for (int recordtime = itimeend_diff; recordtime < itimeend_diff; recordtime++) {
-                  zbeta_tv_exposure[recordtime] += record.value * beta[ibeta] * (bspl(recordtime,bs) - bspl(indextime_diff,bs));
+                  zbeta_tv_exposure[itime_diff] += record.value * beta[ibeta] * (bspl(itime_diff,bs) - bspl(indextime_diff,bs));
           //      Rcout << " idexposure " << *i.second << " idtime-index " << *i.first << std::endl;
                   }
-            
-//******************TODO Can I make this bit do all the pre iteration accumulations and remove the previous zbeta loop? ********************************
               }
-            } 
+            }
           }
         if (bs < nspl - 1) {
           bs++; 
@@ -702,10 +668,10 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
             derivMatrix[(3*ntimes) + time_index_exit - 1] += derivSecond ;
             }
           } else {
-           // for (int t = time_index_entry; t < time_index_exit ; t ++) {
-              ExposureRecord exposure_record = {time_index_entry,time_index_exit, covali_tv};
+            for (int t = time_index_entry; t < time_index_exit ; t ++) {
+              ExposureRecord exposure_record = {t, covali_tv};
               tv_data[covi_spl_i].push_back(exposure_record);
-          //    }
+              }
 
 
             if (tv_data[covi_spl_i].size() > 0) {
@@ -716,7 +682,7 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
                 tv_data[covi_spl_i].erase(std::remove_if(tv_data[covi_spl_i].begin(), 
                                                          tv_data[covi_spl_i].end(), 
                                                          [r, lookback](const ExposureRecord& record) {
-                                                           if(r - record.starttime >= lookback )
+                                                           if(r - record.time >= lookback )
                                                              return true; 
                                                            else 
                                                              return false; 
@@ -725,22 +691,13 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
                                             );
 
                 for (auto& record : tv_data[covi_spl_i]) {
-             //     if(record.starttime > r) break;
-             //int itime_diff = r - record.starttime;
-                  int indextime_diff = time_index_entry - record.starttime;
-                  
-                  int itimestart_diff = r - record.starttime;
-                  if (itimestart_diff < 0) 
-                    itimestart_diff = 0;
-                  if (itimestart_diff >= lookback)
-                    itimestart_diff = lookback;
-                  
-                  int itimeend_diff = record.endtime > time_index_entry ? 0 : time_index_entry - record.endtime;
-               //   if ( itime_diff >= 0 && itime_diff < lookback) { 
-               for (int recordtime = itimeend_diff; recordtime < itimeend_diff; recordtime++) {
-                 
-                      double temp_covali_tv =  record.value*(bspl(recordtime,bs));
-                      double temp_zbeta_tv =  zbeta_temp + (record.value*beta[ibeta]*(bspl(recordtime,bs) - bspl(indextime_diff,bs))); // Decay from start of row period (remove effect on time enter and add in spline decay)
+             //     if(record.time > r) break;
+             int itime_diff = r - record.time;
+                  int indextime_diff = time_index_entry - record.time;
+
+                  if ( itime_diff >= 0 && itime_diff < lookback) { 
+                      double temp_covali_tv =  record.value*(bspl(itime_diff,bs));
+                      double temp_zbeta_tv =  zbeta_temp + (record.value*beta[ibeta]*(bspl(itime_diff,bs) - bspl(indextime_diff,bs))); // Decay from start of row period (remove effect on time enter and add in spline decay)
                       
                       temp_zbeta_tv = temp_zbeta_tv >22 ? 22 : temp_zbeta_tv;
                       temp_zbeta_tv = temp_zbeta_tv < -200 ? -200 : temp_zbeta_tv;
@@ -756,12 +713,11 @@ for (outer_iter = 0; outer_iter < MSTEP_MAX_ITER && done == 0; outer_iter++)
                         derivMatrix[(2*ntimes) + r] += derivFirst_tv ;
                         derivMatrix[(3*ntimes) + r] += derivSecond_tv ;
                         }
-                      
                     }
                   }
                 }
               }
-            }   
+            }
       } /* End of covariate accumulation of derivatives */
 }
 
@@ -862,10 +818,10 @@ int  exittimesN = eventtimesN -1;
               efron_wt_private[time_index_exit - 1] += riskdiff;
               }
             } else {
-              //for (int t = time_index_entry; t < time_index_exit ; t ++) {
-                ExposureRecord exposure_record = {time_index_entry,time_index_exit, covali};
+              for (int t = time_index_entry; t < time_index_exit ; t ++) {
+                ExposureRecord exposure_record = {t, covali};
                 tv_data[covi_spl_i].push_back(exposure_record);
-              //  }
+                }
 
 
               
@@ -876,7 +832,7 @@ int  exittimesN = eventtimesN -1;
                   tv_data[covi_spl_i].erase(std::remove_if(tv_data[covi_spl_i].begin(), 
                                                            tv_data[covi_spl_i].end(), 
                     [r, lookback](const ExposureRecord& record) {
-                      if(r - record.starttime >= lookback ) 
+                      if(r - record.time >= lookback ) 
                         return true; 
                       else 
                         return false; }), 
@@ -884,24 +840,13 @@ int  exittimesN = eventtimesN -1;
 
 
                   for (auto& record : tv_data[covi_spl_i]) {
-                    int indextime_diff = time_index_entry - record.starttime;
-                    
-                    int itimestart_diff = r - record.starttime;
-                    if (itimestart_diff < 0) 
-                      itimestart_diff = 0;
-                    if (itimestart_diff >= lookback)
-                      itimestart_diff = lookback;
-                    
-                    int itimeend_diff = record.endtime > time_index_entry ? 0 : time_index_entry - record.endtime;
-                    //   if ( itime_diff >= 0 && itime_diff < lookback) { 
-                    for (int recordtime = itimeend_diff; recordtime < itimeend_diff; recordtime++) {
-                  //  if(record.starttime > r) break;
-               //   int itime_diff = r - record.starttime;
-                 //   int indextime_diff = time_index_entry - record.starttime;
+                  //  if(record.time > r) break;
+                  int itime_diff = r - record.time;
+                    int indextime_diff = time_index_entry - record.time;
                      
-                  //  if (itime_diff >= 0 && itime_diff < lookback) { /*observation before look back period so drop*/
+                    if (itime_diff >= 0 && itime_diff < lookback) { /*observation before look back period so drop*/
                        
-                      double cov_diff = record.value *(bspl(recordtime,bs) - bspl(indextime_diff,bs));
+                      double cov_diff = record.value *(bspl(itime_diff,bs) - bspl(indextime_diff,bs));
                       
                       double temp_zbeta_Old_tv =  (beta[ibeta]+ dif) * cov_diff; // beta already updated so have to step back with dif
                       temp_zbeta_Old_tv =  temp_zbeta_Old_tv >22 ? 22 : temp_zbeta_Old_tv;
@@ -915,7 +860,7 @@ int  exittimesN = eventtimesN -1;
                       denom_private[r] += riskdiff; 
                     
                       if (r == time_index_exit - 1 &&  Outcomes[rowobs]*weights[rowobs] > 0 ) {
-                        newlk_private += dif * record.value*(bspl(recordtime,bs)) * weights[rowobs];
+                        newlk_private += dif * record.value*(bspl(itime_diff,bs)) * weights[rowobs];
                         efron_wt_private[r] += riskdiff;
                         }
                     }

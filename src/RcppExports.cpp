@@ -65,6 +65,35 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// cox_reg_sparse_parallel_TV_slow
+void cox_reg_sparse_parallel_TV_slow(List modeldata, IntegerVector obs_in, DoubleVector coval_in, DoubleVector weights_in, IntegerVector timein_in, IntegerVector timeout_in, IntegerVector Outcomes_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector id_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, NumericMatrix bspl_in, IntegerVector tvbeta_spl_in, double lambda, double theta_in, int MSTEP_MAX_ITER, double MAX_EPS, long unsigned int threadn);
+RcppExport SEXP _coxsparse_cox_reg_sparse_parallel_TV_slow(SEXP modeldataSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP weights_inSEXP, SEXP timein_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP id_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP bspl_inSEXP, SEXP tvbeta_spl_inSEXP, SEXP lambdaSEXP, SEXP theta_inSEXP, SEXP MSTEP_MAX_ITERSEXP, SEXP MAX_EPSSEXP, SEXP threadnSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type modeldata(modeldataSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type obs_in(obs_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type coval_in(coval_inSEXP);
+    Rcpp::traits::input_parameter< DoubleVector >::type weights_in(weights_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type timein_in(timein_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type timeout_in(timeout_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type Outcomes_in(Outcomes_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covstart_in(covstart_inSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type covend_in(covend_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type id_in(id_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type idn_in(idn_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type idstart_in(idstart_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type idend_in(idend_inSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type bspl_in(bspl_inSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type tvbeta_spl_in(tvbeta_spl_inSEXP);
+    Rcpp::traits::input_parameter< double >::type lambda(lambdaSEXP);
+    Rcpp::traits::input_parameter< double >::type theta_in(theta_inSEXP);
+    Rcpp::traits::input_parameter< int >::type MSTEP_MAX_ITER(MSTEP_MAX_ITERSEXP);
+    Rcpp::traits::input_parameter< double >::type MAX_EPS(MAX_EPSSEXP);
+    Rcpp::traits::input_parameter< long unsigned int >::type threadn(threadnSEXP);
+    cox_reg_sparse_parallel_TV_slow(modeldata, obs_in, coval_in, weights_in, timein_in, timeout_in, Outcomes_in, covstart_in, covend_in, id_in, idn_in, idstart_in, idend_in, bspl_in, tvbeta_spl_in, lambda, theta_in, MSTEP_MAX_ITER, MAX_EPS, threadn);
+    return R_NilValue;
+END_RCPP
+}
 // predictrisk
 List predictrisk(DoubleVector beta_in, IntegerVector obs_in, DoubleVector coval_in, DoubleVector frailty_in, IntegerVector timein_in, DoubleVector weights_in, IntegerVector timeout_in, IntegerVector Outcomes_in, NumericVector covstart_in, NumericVector covend_in, IntegerVector idn_in, IntegerVector idstart_in, IntegerVector idend_in, int threadn);
 RcppExport SEXP _coxsparse_predictrisk(SEXP beta_inSEXP, SEXP obs_inSEXP, SEXP coval_inSEXP, SEXP frailty_inSEXP, SEXP timein_inSEXP, SEXP weights_inSEXP, SEXP timeout_inSEXP, SEXP Outcomes_inSEXP, SEXP covstart_inSEXP, SEXP covend_inSEXP, SEXP idn_inSEXP, SEXP idstart_inSEXP, SEXP idend_inSEXP, SEXP threadnSEXP) {
@@ -144,6 +173,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_coxsparse_cox_reg_sparse_parallel", (DL_FUNC) &_coxsparse_cox_reg_sparse_parallel, 17},
     {"_coxsparse_cox_reg_sparse_parallel_TV", (DL_FUNC) &_coxsparse_cox_reg_sparse_parallel_TV, 20},
+    {"_coxsparse_cox_reg_sparse_parallel_TV_slow", (DL_FUNC) &_coxsparse_cox_reg_sparse_parallel_TV_slow, 20},
     {"_coxsparse_predictrisk", (DL_FUNC) &_coxsparse_predictrisk, 14},
     {"_coxsparse_profile_ci", (DL_FUNC) &_coxsparse_profile_ci, 19},
     {"_coxsparse_safelog", (DL_FUNC) &_coxsparse_safelog, 1},

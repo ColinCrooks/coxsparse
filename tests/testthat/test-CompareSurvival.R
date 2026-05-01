@@ -6,8 +6,8 @@ library(RcppParallel)
 library(testthat)
 devtools::load_all()
 idvars <- c('id', 'start', 'stop', 'event')
-covlist <- c('age', 'year', 'surgery', 'transplant')
-reshapevars <- c(idvars, covlist)
+covlist <- c('age', 'year', 'transplant', 'surgery')
+
 heart <- survival::heart
 heart.dt <- data.table::setDT(data.table::copy(heart))
 heart.dt$start <- heart.dt$start + 1
@@ -25,6 +25,7 @@ heart.dt <- rbind(
     "id" = 104:106
   )
 )
+
 
 heart.dt <- data.table::rbindlist(lapply(1:10, function(i) {
   cbind(heart.dt, heart.dt$id + ((i - 1) * max(heart.dt$id)))
@@ -100,7 +101,7 @@ for (x in covlist) {
 ################################################################
 
 obs <- covbuild$rowobs
-coval <- covbuild$coval
+coval <- as.double(covbuild$coval)
 
 ##########################
 
@@ -138,7 +139,7 @@ weights <- rep(1, length(Outcomes))
 Sys.time()
 system.time(
   coxunreg <- survival::coxph(
-    Surv(start, stop, event) ~ age + year + surgery + transplant,
+    Surv(start, stop, event) ~ age + year + transplant + surgery,
     weights = weights,
     data = heart.dt
   )
@@ -183,60 +184,33 @@ system.time(cox_reg_sparse_parallel(
 ))
 Sys.time() # 17 s
 
-names(CoxRegListParallelbeta$Beta) <- c('age', 'year', 'surgery', 'transplant')
+names(CoxRegListParallelbeta$Beta) <- c('age', 'year', 'transplant', 'surgery')
 expect_equal(coef(coxunreg), CoxRegListParallelbeta$Beta, tolerance = 1e-1)
 
 
 rbind(coef(coxunreg), CoxRegListParallelbeta$Beta)
 
-######################TV######################################################
 
-wnd <- 20
-n.knots <- 4
-knots <- unique(seq(1, wnd, wnd / n.knots)) * 20
-measure.points <- c(0:(2 * wnd)) * 20
-
-bspl <- splines::bs(
-  knots = unique(c(knots)),
-  x = measure.points,
-  intercept = T
-)
-
-CoxRegListParallelbeta <- list()
-
-tvbeta_spl <- c(0, 0, 1, 1)
-
-CoxRegListParallelbeta[['Beta']] <- vector('double', length(covstart) + (sum(tvbeta_spl)*ncol(bspl)) - sum(tvbeta_spl) )
-CoxRegListParallelbeta[['Frailty']] <- vector('double', length(idstart))
-CoxRegListParallelbeta[['basehaz']] <- vector('double', max(timeout))
-CoxRegListParallelbeta[['cumhaz']] <- vector('double', max(timeout))
-CoxRegListParallelbeta[['ModelSummary']] <- vector('double', 8)
-
-Sys.time()
-system.time(cox_reg_sparse_parallel_TV(
-  modeldata = CoxRegListParallelbeta,
-  obs_in = obs,
-  Outcomes_in = Outcomes,
-  timein_in = timein,
-  timeout_in = timeout,
-  weights_in = weights,
-  coval_in = coval,
-  covstart_in = covstart,
-  covend_in = covend,
-  id_in = id,
-  idn_in = vector('integer', 0L),
-  idstart_in = vector('integer', 0L),
-  idend_in = vector('integer', 0L),
-  tvbeta_spl_in = tvbeta_spl,
-  bspl_in = bspl,
-  lambda = lambda,
-  theta_in = 0,
-  MSTEP_MAX_ITER = 10,
-  MAX_EPS = 1e-10,
-  threadn = 32
-))
 
 ###############################################################################
+
+
+
+weights <- rep(1, length(Outcomes))
+
+Sys.time()
+system.time(
+  coxtv <- survival::coxph(
+    Surv(start, stop, event) ~ age + year + transplant + X1 + X2 + X3 + X4 + X5 + X6 + X7 ,
+    weights = weights,
+    data = heart.dt
+  )
+)
+Sys.time() #20s
+coef(coxtv)
+coxtv$loglik
+
+
 
 ##############################################################################
 ################### Frailty ###########
